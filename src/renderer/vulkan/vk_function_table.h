@@ -132,6 +132,36 @@ struct Functions {
   PFN_vkCmdResolveImage vkCmdResolveImage = nullptr;
   PFN_vkCmdClearColorImage vkCmdClearColorImage = nullptr;
 
+  // W4: pipeline state, descriptor sets, samplers, dynamic state, draw.
+  PFN_vkCreateShaderModule vkCreateShaderModule = nullptr;
+  PFN_vkDestroyShaderModule vkDestroyShaderModule = nullptr;
+  PFN_vkCreatePipelineLayout vkCreatePipelineLayout = nullptr;
+  PFN_vkDestroyPipelineLayout vkDestroyPipelineLayout = nullptr;
+  PFN_vkCreateDescriptorSetLayout vkCreateDescriptorSetLayout = nullptr;
+  PFN_vkDestroyDescriptorSetLayout vkDestroyDescriptorSetLayout = nullptr;
+  PFN_vkCreateDescriptorPool vkCreateDescriptorPool = nullptr;
+  PFN_vkDestroyDescriptorPool vkDestroyDescriptorPool = nullptr;
+  PFN_vkResetDescriptorPool vkResetDescriptorPool = nullptr;
+  PFN_vkAllocateDescriptorSets vkAllocateDescriptorSets = nullptr;
+  PFN_vkFreeDescriptorSets vkFreeDescriptorSets = nullptr;
+  PFN_vkUpdateDescriptorSets vkUpdateDescriptorSets = nullptr;
+  PFN_vkCreateSampler vkCreateSampler = nullptr;
+  PFN_vkDestroySampler vkDestroySampler = nullptr;
+  PFN_vkCreateGraphicsPipelines vkCreateGraphicsPipelines = nullptr;
+  PFN_vkDestroyPipeline vkDestroyPipeline = nullptr;
+  PFN_vkCmdBindPipeline vkCmdBindPipeline = nullptr;
+  PFN_vkCmdBindDescriptorSets vkCmdBindDescriptorSets = nullptr;
+  PFN_vkCmdBindVertexBuffers vkCmdBindVertexBuffers = nullptr;
+  PFN_vkCmdDraw vkCmdDraw = nullptr;
+  PFN_vkCmdDrawIndexed vkCmdDrawIndexed = nullptr;
+  PFN_vkCmdSetViewport vkCmdSetViewport = nullptr;
+  PFN_vkCmdSetScissor vkCmdSetScissor = nullptr;
+  PFN_vkCmdSetBlendConstants vkCmdSetBlendConstants = nullptr;
+  PFN_vkCmdSetDepthBias vkCmdSetDepthBias = nullptr;
+  PFN_vkCmdSetLineWidth vkCmdSetLineWidth = nullptr;
+  PFN_vkCmdSetDepthBounds vkCmdSetDepthBounds = nullptr;
+  PFN_vkCmdSetRasterizerDiscardEnable vkCmdSetRasterizerDiscardEnable = nullptr;
+
   // Phase 1: load the loader library and resolve the global functions.
   bool LoadGlobal(const char* loader_name, std::string& err);
   // Phase 2: resolve instance-level functions.

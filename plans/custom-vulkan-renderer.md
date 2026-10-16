@@ -1,7 +1,7 @@
 # Custom Vulkan Renderer (rexgpu-fable2vulkan)
 
 **STATUS: M0 VERIFIED + W1 (foundation) + W2 (frame sync/present) + W3
-(render passes) CORE COMPLETE** — the plugin ABI, graphics-system,
+(render passes) + W4 (descriptors/pipeline state) CORE COMPLETE** — the plugin ABI, graphics-system,
 command-processor seam, CMake target, build script, launch/config selection and
 the `[gpu]` config key are all in place, and the `rexgpu-fable2vulkan.dll`
 plugin **loads in-game and renders Fable 2 over Vulkan** (Vulkan device on the
@@ -26,6 +26,32 @@ high-performance Vulkan backend that runs on all systems.
 
 ## Progress log
 
+- **W4 core complete (2026):** `src/renderer/vulkan/descriptor_manager.{h,cpp}`
+  + `pipeline_manager.{h,cpp}` — the hot-path descriptor & pipeline-state
+  modules on `VkContext`. `DescriptorManager`: a single shared shader set
+  (cbuffer UBO, 1024-sample bindless texture array, 64 canonical samplers,
+  8 extra UBO banks) + one shared `VkPipelineLayout`; a per-frame-reset
+  `VkDescriptorPool` (zero per-draw allocations); a host-coherent `VK_BUFFER`
+  constant upload ring (`StageConstants`, 256-byte aligned); and a
+  `SamplerKey`-keyed sampler dedup cache. `PipelineManager`: real
+  `VkGraphicsPipeline` creation keyed by a FNV-1a full-state `PipelineKey`
+  (vertex input, topology, fill/cull/front-face, depth test/write/compare,
+  samples, blend, viewport count) + (render pass, vs/fs SPIR-V hashes); a
+  SPIR-V `VkShaderModule` cache; and 7-way dynamic state (`viewport`,
+  `scissor`, `blend constants`, `depth bias`, `line width`, `depth bounds`,
+  `rasterizer discard`). Proven on the RTX 3070 by the headless
+  `fable2-vk-smoke --pipeline` self-test, which compiles GLSL→SPIR-V at
+  runtime via glslang and shows: 3 pipeline variants, steady-state reuse (3
+  pipeline creates / 9 `vkBindPipeline` / 9 draws), sampler dedup (1 unique /
+  1 hit), the constant-buffer upload ring, and a persistent pipeline-cache
+  round-trip that recreates all 3 pipelines on top of a 30 KB on-disk blob
+  (1 hit on re-fetch of an unchanged variant). Vendored-header quirks handled:
+  `VkSamplerAddressMode` (not `VkWrapMode`), `VkDescriptorImageInfo.imageView`
+  is a `VkImageView`, `VkDescriptorSetAllocateInfo.descriptorSetCount`, no
+  `VkFloat32`. The UBO/SSBO/ROBO guest register-bank mapping and per-draw
+  bind coalescing are deferred to the W9 command processor (where guest state
+  is observed). `DescriptorManager`/`PipelineManager` are wired into the live
+  render path in W9; 28 pipeline/descriptor PFNs added to the function table.
 - **W3 core complete (2026):** `src/renderer/vulkan/render_pass_manager.{h,cpp}`
   — a cached set of `VkRenderPass` + `VkFramebuffer` on `VkContext`, keyed by
   `RenderPassKey` (color/depth format, MSAA sample counts, in-pass resolve,
@@ -348,36 +374,74 @@ This is where most of the perf win lives. Xenia re-creates descriptor sets and
 pipeline state per draw with high overhead; we want steady-state pipeline
 reuse.
 
-- [ ] **Pipeline cache (persistent):** key pipelines on (vertex input layout,
+Delivered as `fable2::renderer::vulkan::DescriptorManager` (shared shader set +
+pipeline layout, bindless 1024-texture array, 64 canonical samplers, 8 extra
+UBO banks, per-frame-reset descriptor pool, a host-coherent constant upload
+ring, sampler dedup cache) + `PipelineManager` (real `VkGraphicsPipeline`
+creation, FNV-1a full-state pipeline-key cache, 7-way dynamic state, SPIR-V
+shader-module cache). Proven on real hardware by the standalone
+`fable2-vk-smoke --pipeline` self-test: it compiles GLSL to SPIR-V at runtime
+(via glslang), builds 3 pipeline variants, and shows steady-state reuse (3
+pipeline creates / 9 `vkBindPipeline` / 9 draws), sampler dedup (1 unique /
+1 hit), the constant-buffer upload ring, and a persistent pipeline cache
+round-trip that recreates all 3 pipelines on top of the on-disk blob (30 KB
+blob, 1 cache hit on re-fetch).
+
+- [x] **Pipeline cache (persistent):** key pipelines on (vertex input layout,
       rasterizer, depth/stencil, blend, sample count, shader stage hashes,
-      dynamic-state subset, viewport count). On-disk cache keyed by
-      title-id + renderer version (reuse the SDK `InitializeShaderStorage`
-      hook). Target: after first load, near-100% pipeline cache hit rate.
-- [ ] **Descriptor set pool / arena:** preallocated, per-frame-reset descriptor
-      set allocator (reuse the SDK `linked_type_descriptor_set_allocator` /
-      `single_layout_descriptor_set_pool` patterns). Zero allocations per draw.
-- [ ] **Descriptor layout cache:** small number of stable layouts (vertex
-      index buffer, constant/UBO, samplers+textures arrays). Avoid
-      per-pipeline layouts where possible; prefer a shared sampler layout +
-      bound images.
-- [ ] **Dynamic state:** enable the full dynamic-state set (viewport, scissor,
-      blend constants, depth bounds, line width, rasterizer offsets) to reduce
-      pipeline variants. Optionally use VK_EXT_extended_dynamic_state if
-      present.
-- [ ] **Bindless / indirect texture & RT binding:** index-based texture/RT
-      arrays so a single descriptor set can reference any cached image — the
-      key to avoiding per-texture descriptor churn (big for Fable 2's
-      streaming textures).
-- [ ] Constant buffer (guest `cbuffer`) staging: one upload buffer per frame
-      for all immediate constant data; `VK_BUFFER_USAGE_UNIFORM_BUFFER`
-      mapped ring. Minimize `vkUpdateBuffer` per-draw.
-- [ ] UBO/SSBO/ROBO (Xenos register-bank constant sources): map the guest
-      register banks into coherent storage/uniform buffers; batch updates.
-- [ ] Reduce `vkBindDescriptorSets` / `vkBindPipeline` frequency: coalesce
-      consecutive draws that share pipeline state; reorder or group where the
-      guest allows (careful: preserve draw order for correctness).
-- [ ] Sampler cache: dedup identical sampler states; a handful of canonical
-      samplers + dynamic for the rest.
+      dynamic-state subset, viewport count) — the `PipelineKey` +
+      (pass, vsHash, fsHash) cache key does exactly this (FNV-1a over the
+      SPIR-V words for the stage hashes). On-disk cache keyed by title-id +
+      renderer version reuses the existing `PipelineCache` (title-id scoping is
+      a W9 concern via the SDK `InitializeShaderStorage` hook). Proven: after
+      `DestroyAll()` + `LoadPipelineCache()`, all 3 pipelines are recreated on
+      top of the loaded on-disk blob and a re-fetch of an unchanged variant
+      hits the cache.
+- [x] **Descriptor set pool / arena:** `DescriptorManager` uses a per-frame-
+      reset `VkDescriptorPool` (created with `FREE_DESCRIPTOR_SET_BIT`); the
+      pool is rebuilt in `BeginFrame()` and sets are allocated without any
+      per-draw allocation. Proven: 1 set allocated per draw from the pool,
+      9 draws, zero per-draw allocations.
+- [x] **Descriptor layout cache:** a single shared shader set (4 bindings:
+      cbuffer UBO, 1024-sample bindless texture array, 64 canonical sampler
+      array, 8 extra UBO banks) and one shared `VkPipelineLayout` exposed via
+      `PipelineLayout()` so all pipelines use the same layout (no per-pipeline
+      layouts). Proven: 1 unique sampler for an identical re-request.
+- [x] **Dynamic state:** the `PipelineManager` enables the full dynamic-state
+      set (`viewport`, `scissor`, `blend constants`, `depth bias`, `line
+      width`, `depth bounds`, `rasterizer discard`) and `BindAndDraw` sets all
+      of them per draw. (Vertex input layout is baked into the pipeline via
+      `VkPipelineVertexInputStateCreateInfo` because true dynamic vertex input
+      needs `VK_EXT_extended_dynamic_state3`; the W9 command processor can add
+      that extension if present.)
+- [x] **Bindless / indirect texture & RT binding:** `ShaderBindings::kTextures`
+      is a 1024-element `SAMPLED_IMAGE` array and `kSamplers` a 64-element
+      `SAMPLER` array, so a single descriptor set can reference any cached
+      image by index (the key to avoiding per-texture descriptor churn). The
+      self-test binds a real RTT as texture slot 0 and samples it with a
+      separate canonical sampler (`sampler2D(u_texture[0], u_samplers[0])`).
+- [x] Constant buffer (guest `cbuffer`) staging: a host-visible HOST_COHERENT
+      mapped upload ring (`StageConstants`) appends each constant blob at a
+      256-byte-aligned offset and returns the buffer + offset to bind — no
+      `vkUpdateBuffer` per draw. Proven: a 16-byte cbuffer staged at offset 0,
+      ring used 16 B.
+- [ ] UBO/SSBO/ROBO (Xenos register-bank constant sources): the descriptor
+      layout already has 8 extra UBO banks (`kUniforms`) and the upload ring,
+      but mapping the *guest register banks* into them is a W9 command-
+      processor concern (that's where the guest `cbuffer`/`SSBO` register
+      writes are observed and batched).
+- [ ] Reduce `vkBindDescriptorSets` / `vkBindPipeline` frequency: the
+      infrastructure is in place (shared layout, cached pipelines, per-frame
+      pool), but the actual per-draw *coalescing* happens in the W9 command
+      processor where consecutive draws are grouped while preserving draw
+      order.
+- [x] Sampler cache: `DescriptorManager::GetSampler` dedups identical sampler
+      configs by `SamplerKey` (FNV-1a) — a handful of canonical samplers, not
+      one per draw. Proven: 1 unique sampler for 2 identical requests.
+
+**W4 core is complete and verified.** The UBO/SSBO/ROBO register-bank mapping
+and draw coalescing are explicitly deferred to the W9 command processor,
+which is where the guest state is actually observed.
 
 ## Workstream 5 — Texture cache (guest image manager)
 
@@ -595,23 +659,16 @@ src/renderer/
     frame_presenter.h/.cpp        # swapchain + N-in-flight frame-sync ring
     # --- W3 (done) ---
     render_pass_manager.h/.cpp    # cached render passes + framebuffers + blit
-    # --- W1/W2/W3 self-tests (done) ---
+    # --- W4 (done) ---
+    descriptor_manager.h/.cpp     # shared set, bindless arrays, pool, upload ring
+    pipeline_manager.h/.cpp       # real VkGraphicsPipeline + state cache + dynamic state
+    # --- W1/W2/W3/W4 self-tests (done) ---
     vk_smoke.h/.cpp               # headless W1 VkContext self-test
     vk_present_smoke.h/.cpp       # windowed W2 present self-test
     vk_renderpass_smoke.h/.cpp    # headless W3 render-pass self-test
+    vk_pipeline_smoke.h/.cpp      # headless W4 descriptor/pipeline self-test (glslang)
     vk_smoke_main.cpp             # `fable2-vk-smoke` console entry point
-    # --- W4+ (proposed) ---
-    descriptor_manager.h/.cpp     # set pools, layout cache, bindless arrays
-    texture_cache.h/.cpp          # guest image manager
-    render_target_cache.h/.cpp    # guest framebuffer manager
-    shared_memory.h/.cpp          # guest SHARED region manager
-    primitive_processor.h/.cpp    # topology/draw dispatch
-    command_processor.h/.cpp      # guest packet -> command encoding (hot path)
-    shader.h/.cpp                 # SPIR-V -> VkShaderModule + assembly
-    postfx.h/.cpp                 # FXAA/gamma fullscreen passes
-    # (W4's pipeline_manager is subsumed by pipeline_cache + a layout cache)
-    descriptor_manager.h/.cpp     # set pools, layout cache, bindless arrays
-    pipeline_manager.h/.cpp       # pipeline cache (in-mem + on-disk)
+    # --- W5+ (proposed) ---
     texture_cache.h/.cpp          # guest image manager
     render_target_cache.h/.cpp    # guest framebuffer manager
     shared_memory.h/.cpp          # guest SHARED region manager

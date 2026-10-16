@@ -10,6 +10,7 @@
 #include <iostream>
 #include <string>
 
+#include "vk_pipeline_smoke.h"
 #include "vk_present_smoke.h"
 #include "vk_renderpass_smoke.h"
 #include "vk_smoke.h"
@@ -21,6 +22,7 @@ int main(int argc, char** argv) {
   std::string report;
   bool present = false;
   bool renderpass = false;
+  bool pipeline = false;
   for (int i = 1; i < argc; ++i) {
     const std::string a = argv[i];
     if (a == "--validation") {
@@ -35,6 +37,8 @@ int main(int argc, char** argv) {
       cfg.memoryBudgetBytes = static_cast<uint64_t>(std::stoul(argv[++i])) * 1024 * 1024;
     } else if (a == "--renderpass") {
       renderpass = true;
+    } else if (a == "--pipeline") {
+      pipeline = true;
     } else if (a == "--present") {
       present = true;
     } else if (a == "--present-seconds" && i + 1 < argc) {
@@ -55,11 +59,14 @@ int main(int argc, char** argv) {
     } else if (a == "--help" || a == "-h") {
       std::cout << "fable2-vk-smoke [--validation] [--device NAME] [--report FILE]\n"
                    "                [--cache FILE] [--budget-mb N]\n"
-                   "                [--renderpass]\n"
+                   "                [--renderpass] [--pipeline]\n"
                    "                [--present] [--present-seconds N] [--no-vsync]\n"
                    "                [--tear] [--resize] [--cap N] [--pw W] [--ph H]\n";
       return 0;
     }
+  }
+  if (pipeline) {
+    return fable2::renderer::vulkan::RunPipelineSmokeTest(cfg, report);
   }
   if (renderpass) {
     return fable2::renderer::vulkan::RunRenderPassSmokeTest(cfg, report);

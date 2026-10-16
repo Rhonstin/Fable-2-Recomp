@@ -167,6 +167,35 @@ bool Functions::LoadDevice(VkDevice device, std::string& err) {
   FABLE2_DEV(vkCmdBlitImage);
   FABLE2_DEV(vkCmdResolveImage);
   FABLE2_DEV(vkCmdClearColorImage);
+  // W4: pipeline state, descriptor sets, samplers, dynamic state, draw.
+  FABLE2_DEV(vkCreateShaderModule);
+  FABLE2_DEV(vkDestroyShaderModule);
+  FABLE2_DEV(vkCreatePipelineLayout);
+  FABLE2_DEV(vkDestroyPipelineLayout);
+  FABLE2_DEV(vkCreateDescriptorSetLayout);
+  FABLE2_DEV(vkDestroyDescriptorSetLayout);
+  FABLE2_DEV(vkCreateDescriptorPool);
+  FABLE2_DEV(vkDestroyDescriptorPool);
+  FABLE2_DEV(vkResetDescriptorPool);
+  FABLE2_DEV(vkAllocateDescriptorSets);
+  FABLE2_DEV(vkFreeDescriptorSets);
+  FABLE2_DEV(vkUpdateDescriptorSets);
+  FABLE2_DEV(vkCreateSampler);
+  FABLE2_DEV(vkDestroySampler);
+  FABLE2_DEV(vkCreateGraphicsPipelines);
+  FABLE2_DEV(vkDestroyPipeline);
+  FABLE2_DEV(vkCmdBindPipeline);
+  FABLE2_DEV(vkCmdBindDescriptorSets);
+  FABLE2_DEV(vkCmdBindVertexBuffers);
+  FABLE2_DEV(vkCmdDraw);
+  FABLE2_DEV(vkCmdDrawIndexed);
+  FABLE2_DEV(vkCmdSetViewport);
+  FABLE2_DEV(vkCmdSetScissor);
+  FABLE2_DEV(vkCmdSetBlendConstants);
+  FABLE2_DEV(vkCmdSetDepthBias);
+  FABLE2_DEV(vkCmdSetLineWidth);
+  FABLE2_DEV(vkCmdSetDepthBounds);
+  FABLE2_DEV(vkCmdSetRasterizerDiscardEnable);
 #undef FABLE2_DEV
 
   if (!vkAllocateMemory || !vkCreateBuffer || !vkGetDeviceQueue) {
