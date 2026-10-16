@@ -262,12 +262,225 @@ void PipelineManager::DestroyAll() {
     }
   }
   pipelineCache_.clear();
+  for (auto& [hash, pipeline] : multiPipelineCache_) {
+    if (pipeline) {
+      fn.vkDestroyPipeline(device, pipeline, nullptr);
+    }
+  }
+  multiPipelineCache_.clear();
   for (auto& [hash, module] : shaderCache_) {
     if (module) {
       fn.vkDestroyShaderModule(device, module, nullptr);
     }
   }
   shaderCache_.clear();
+}
+
+VkPipeline PipelineManager::GetPipelineMulti(const PipelineKey& key, VkRenderPass renderPass,
+                                             const std::vector<uint32_t>& vsSpirv,
+                                             const std::vector<uint32_t>& hsSpirv,
+                                             const std::vector<uint32_t>& dsSpirv,
+                                             const std::vector<uint32_t>& gsSpirv,
+                                             const std::vector<uint32_t>& fsSpirv,
+                                             uint32_t patchControlPoints) {
+  if (vsSpirv.empty() || fsSpirv.empty()) {
+    return VK_NULL_HANDLE;
+  }
+  const uint64_t vsHash = HashSpirv(vsSpirv);
+  const uint64_t hsHash = hsSpirv.empty() ? 0 : HashSpirv(hsSpirv);
+  const uint64_t dsHash = dsSpirv.empty() ? 0 : HashSpirv(dsSpirv);
+  const uint64_t gsHash = gsSpirv.empty() ? 0 : HashSpirv(gsSpirv);
+  const uint64_t fsHash = HashSpirv(fsSpirv);
+
+  MultiCacheKey mkey{key, renderPass, vsHash, hsHash, dsHash, gsHash, fsHash, patchControlPoints};
+  auto it = multiPipelineCache_.find(mkey);
+  if (it != multiPipelineCache_.end()) {
+    ++multiPipelineHits_;
+    return it->second;
+  }
+
+  Functions& fn = ctx_->functions();
+  const VkDevice device = ctx_->device();
+
+  // Create shader modules for each present stage.
+  const VkShaderModule vsModule = GetShaderModule(vsSpirv, VK_SHADER_STAGE_VERTEX_BIT);
+  const VkShaderModule hsModule =
+      hsSpirv.empty() ? VK_NULL_HANDLE : GetShaderModule(hsSpirv, VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT);
+  const VkShaderModule dsModule =
+      dsSpirv.empty() ? VK_NULL_HANDLE : GetShaderModule(dsSpirv, VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT);
+  const VkShaderModule gsModule =
+      gsSpirv.empty() ? VK_NULL_HANDLE : GetShaderModule(gsSpirv, VK_SHADER_STAGE_GEOMETRY_BIT);
+  const VkShaderModule fsModule = GetShaderModule(fsSpirv, VK_SHADER_STAGE_FRAGMENT_BIT);
+  if (vsModule == VK_NULL_HANDLE || fsModule == VK_NULL_HANDLE) {
+    return VK_NULL_HANDLE;
+  }
+  if ((hsSpirv.empty() != dsSpirv.empty()) && !hsSpirv.empty()) {
+    // HS and DS must be present together for tessellation.
+    return VK_NULL_HANDLE;
+  }
+
+  const bool tessellated = (hsModule != VK_NULL_HANDLE && dsModule != VK_NULL_HANDLE);
+
+  // Build the stage array (up to 5 stages).
+  VkPipelineShaderStageCreateInfo stages[5] = {};
+  uint32_t stageCount = 0;
+
+  stages[stageCount] = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, nullptr, 0,
+                        VK_SHADER_STAGE_VERTEX_BIT, vsModule, "main", nullptr};
+  stages[stageCount++].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+  if (tessellated) {
+    stages[stageCount] = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, nullptr, 0,
+                          VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT, hsModule, "main", nullptr};
+    stages[stageCount++].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    stages[stageCount] = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, nullptr, 0,
+                          VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT, dsModule, "main", nullptr};
+    stages[stageCount++].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+  }
+  if (gsModule != VK_NULL_HANDLE) {
+    stages[stageCount] = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, nullptr, 0,
+                          VK_SHADER_STAGE_GEOMETRY_BIT, gsModule, "main", nullptr};
+    stages[stageCount++].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+  }
+  stages[stageCount] = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, nullptr, 0,
+                        VK_SHADER_STAGE_FRAGMENT_BIT, fsModule, "main", nullptr};
+  stages[stageCount++].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+
+  // Vertex input state (same as GetPipeline).
+  VkVertexInputBindingDescription binding = {};
+  VkVertexInputAttributeDescription attributes[2] = {};
+  uint32_t bindingCount = 0;
+  uint32_t attributeCount = 0;
+  switch (key.vertexInput) {
+    case VertexInputLayout::kPos:
+      binding = {0, 12, VK_VERTEX_INPUT_RATE_VERTEX};
+      attributes[0] = {0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0};
+      bindingCount = 1; attributeCount = 1;
+      break;
+    case VertexInputLayout::kPosTex:
+      binding = {0, 20, VK_VERTEX_INPUT_RATE_VERTEX};
+      attributes[0] = {0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0};
+      attributes[1] = {1, 0, VK_FORMAT_R32G32_SFLOAT, 12};
+      bindingCount = 1; attributeCount = 2;
+      break;
+    default:
+      break;
+  }
+  VkPipelineVertexInputStateCreateInfo visci{};
+  visci.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+  visci.vertexBindingDescriptionCount = bindingCount;
+  visci.pVertexBindingDescriptions = bindingCount ? &binding : nullptr;
+  visci.vertexAttributeDescriptionCount = attributeCount;
+  visci.pVertexAttributeDescriptions = attributeCount ? attributes : nullptr;
+
+  // Input assembly.
+  VkPipelineInputAssemblyStateCreateInfo iasci{};
+  iasci.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+  iasci.topology = key.topology;
+  iasci.primitiveRestartEnable = key.primitiveRestart ? VK_TRUE : VK_FALSE;
+
+  // Viewport state (dynamic).
+  VkPipelineViewportStateCreateInfo vpsci{};
+  vpsci.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+  vpsci.viewportCount = key.viewportCount;
+  vpsci.scissorCount = key.viewportCount;
+
+  // Rasterization.
+  VkPipelineRasterizationStateCreateInfo rastci{};
+  rastci.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+  rastci.depthClampEnable = VK_FALSE;
+  rastci.rasterizerDiscardEnable = VK_FALSE;
+  rastci.polygonMode = key.fillMode;
+  rastci.cullMode = key.cullMode;
+  rastci.frontFace = key.frontFace;
+  rastci.depthBiasEnable = VK_FALSE;
+  rastci.lineWidth = 1.0f;
+
+  // Tessellation state (only for tessellated pipelines).
+  VkPipelineTessellationStateCreateInfo tessci{};
+  if (tessellated) {
+    tessci.sType = VK_STRUCTURE_TYPE_PIPELINE_TESSELLATION_STATE_CREATE_INFO;
+    tessci.patchControlPoints = patchControlPoints;
+  }
+
+  // Multisample.
+  VkPipelineMultisampleStateCreateInfo msaci{};
+  msaci.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+  msaci.rasterizationSamples = key.samples;
+  msaci.sampleShadingEnable = VK_FALSE;
+  msaci.alphaToCoverageEnable = VK_FALSE;
+  msaci.alphaToOneEnable = VK_FALSE;
+
+  // Depth/stencil.
+  VkPipelineDepthStencilStateCreateInfo dssci{};
+  dssci.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+  dssci.depthTestEnable = key.depthTest ? VK_TRUE : VK_FALSE;
+  dssci.depthWriteEnable = key.depthWrite ? VK_TRUE : VK_FALSE;
+  dssci.depthCompareOp = key.depthCompare;
+  dssci.depthBoundsTestEnable = VK_TRUE;
+  dssci.stencilTestEnable = VK_FALSE;
+
+  // Color blend.
+  VkPipelineColorBlendAttachmentState blend[1] = {};
+  blend[0].blendEnable = key.alphaBlend ? VK_TRUE : VK_FALSE;
+  if (key.alphaBlend) {
+    blend[0].srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+    blend[0].dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+    blend[0].colorBlendOp = VK_BLEND_OP_ADD;
+    blend[0].srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+    blend[0].dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+    blend[0].alphaBlendOp = VK_BLEND_OP_ADD;
+  } else {
+    blend[0].srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+    blend[0].dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
+    blend[0].colorBlendOp = VK_BLEND_OP_ADD;
+    blend[0].srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+    blend[0].dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+    blend[0].alphaBlendOp = VK_BLEND_OP_ADD;
+  }
+  blend[0].colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+                            VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+  VkPipelineColorBlendStateCreateInfo cbsci{};
+  cbsci.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+  cbsci.attachmentCount = 1;
+  cbsci.pAttachments = blend;
+
+  // Dynamic state.
+  VkDynamicState dynamicStates[7] = {
+      VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR, VK_DYNAMIC_STATE_BLEND_CONSTANTS,
+      VK_DYNAMIC_STATE_DEPTH_BIAS, VK_DYNAMIC_STATE_LINE_WIDTH, VK_DYNAMIC_STATE_DEPTH_BOUNDS,
+      VK_DYNAMIC_STATE_RASTERIZER_DISCARD_ENABLE};
+  VkPipelineDynamicStateCreateInfo dsci{};
+  dsci.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+  dsci.dynamicStateCount = 7;
+  dsci.pDynamicStates = dynamicStates;
+
+  VkGraphicsPipelineCreateInfo gpki{};
+  gpki.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+  gpki.stageCount = stageCount;
+  gpki.pStages = stages;
+  gpki.pVertexInputState = &visci;
+  gpki.pInputAssemblyState = &iasci;
+  gpki.pTessellationState = tessellated ? &tessci : nullptr;
+  gpki.pViewportState = &vpsci;
+  gpki.pRasterizationState = &rastci;
+  gpki.pMultisampleState = &msaci;
+  gpki.pDepthStencilState = &dssci;
+  gpki.pColorBlendState = &cbsci;
+  gpki.pDynamicState = &dsci;
+  gpki.layout = desc_ ? desc_->PipelineLayout() : VK_NULL_HANDLE;
+  gpki.renderPass = renderPass;
+  gpki.subpass = 0;
+
+  const VkPipelineCache pipelineCache = ctx_->pipelineCache();
+  VkPipeline pipeline = VK_NULL_HANDLE;
+  if (fn.vkCreateGraphicsPipelines(device, pipelineCache, 1, &gpki, nullptr, &pipeline) !=
+          VK_SUCCESS ||
+      pipeline == VK_NULL_HANDLE) {
+    return VK_NULL_HANDLE;
+  }
+  ++multiPipelineCreates_;
+  multiPipelineCache_.emplace(mkey, pipeline);
+  return pipeline;
 }
 
 }  // namespace fable2::renderer::vulkan

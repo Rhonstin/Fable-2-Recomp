@@ -106,6 +106,21 @@ class PipelineManager {
                          const std::vector<uint32_t>& vertexSpirv,
                          const std::vector<uint32_t>& fragmentSpirv);
 
+  // W9: Multi-stage pipeline assembly. Up to 5 stages (VS, HS, DS, GS, FS).
+  // Pass nullptr/empty vectors for stages that are not present.
+  // `patchControlPoints` is only used when HS+DS are both present (tessellation).
+  VkPipeline GetPipelineMulti(const PipelineKey& key, VkRenderPass renderPass,
+                              const std::vector<uint32_t>& vsSpirv,
+                              const std::vector<uint32_t>& hsSpirv,
+                              const std::vector<uint32_t>& dsSpirv,
+                              const std::vector<uint32_t>& gsSpirv,
+                              const std::vector<uint32_t>& fsSpirv,
+                              uint32_t patchControlPoints = 3);
+
+  // Diagnostics for multi-stage pipelines.
+  std::size_t multiPipelineCreates() const { return multiPipelineCreates_; }
+  std::size_t multiPipelineHits() const { return multiPipelineHits_; }
+
   // A per-pipeline draw: bind the pipeline, bind the descriptor set, set the
   // dynamic state (viewport/scissor/blend/depth bias/line width), and draw.
   // `vertexBuffer` + `vertexOffset` are the single vertex buffer (binding 0).
@@ -152,6 +167,35 @@ class PipelineManager {
   // FNV-1a over SPIR-V bytes.
   static uint64_t HashSpirv(const std::vector<uint32_t>& spirv);
 
+  // Multi-stage pipeline cache (W9).
+  struct MultiCacheKey {
+    PipelineKey state;
+    VkRenderPass renderPass = VK_NULL_HANDLE;
+    uint64_t vsHash = 0;
+    uint64_t hsHash = 0;
+    uint64_t dsHash = 0;
+    uint64_t gsHash = 0;
+    uint64_t fsHash = 0;
+    uint32_t patchControlPoints = 3;
+    bool operator==(const MultiCacheKey& o) const {
+      return state == o.state && renderPass == o.renderPass && vsHash == o.vsHash &&
+             hsHash == o.hsHash && dsHash == o.dsHash && gsHash == o.gsHash &&
+             fsHash == o.fsHash && patchControlPoints == o.patchControlPoints;
+    }
+  };
+  struct MultiCacheKeyHash {
+    std::size_t operator()(const MultiCacheKey& k) const {
+      std::size_t h = PipelineKeyHash{}(k.state);
+      h ^= std::hash<uint64_t>{}(reinterpret_cast<uint64_t>(k.renderPass)) + 0x9e3779b9 +
+           (h << 6) + (h >> 2);
+      for (uint64_t v : {k.vsHash, k.hsHash, k.dsHash, k.gsHash, k.fsHash}) {
+        h ^= std::hash<uint64_t>{}(v) + 0x9e3779b9 + (h << 6) + (h >> 2);
+      }
+      h ^= std::hash<uint32_t>{}(k.patchControlPoints) + 0x9e3779b9 + (h << 6) + (h >> 2);
+      return h;
+    }
+  };
+
   VkContext* ctx_ = nullptr;
   DescriptorManager* desc_ = nullptr;
   std::unordered_map<uint64_t, VkShaderModule> shaderCache_;
@@ -162,6 +206,11 @@ class PipelineManager {
   std::size_t bindPipelineCalls_ = 0;
   std::size_t bindDescriptorSetCalls_ = 0;
   std::size_t drawCalls_ = 0;
+
+  // Multi-stage pipeline cache (W9).
+  std::unordered_map<MultiCacheKey, VkPipeline, MultiCacheKeyHash> multiPipelineCache_;
+  std::size_t multiPipelineCreates_ = 0;
+  std::size_t multiPipelineHits_ = 0;
 };
 
 }  // namespace fable2::renderer::vulkan

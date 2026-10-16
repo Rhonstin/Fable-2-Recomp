@@ -13,6 +13,10 @@
 #include "vk_pipeline_smoke.h"
 #include "vk_present_smoke.h"
 #include "vk_renderpass_smoke.h"
+#include "vk_draw_smoke.h"
+#include "vk_shader_smoke.h"
+#include "vk_rt_smoke.h"
+#include "vk_shared_blit_smoke.h"
 #include "vk_smoke.h"
 #include "vk_texture_smoke.h"
 
@@ -25,6 +29,10 @@ int main(int argc, char** argv) {
   bool renderpass = false;
   bool pipeline = false;
   bool texture = false;
+  bool rt = false;
+  bool shared = false;
+  bool draw = false;
+  bool shader = false;
   for (int i = 1; i < argc; ++i) {
     const std::string a = argv[i];
     if (a == "--validation") {
@@ -43,6 +51,14 @@ int main(int argc, char** argv) {
       pipeline = true;
     } else if (a == "--texture") {
       texture = true;
+    } else if (a == "--rt") {
+      rt = true;
+    } else if (a == "--shared") {
+      shared = true;
+    } else if (a == "--draw") {
+      draw = true;
+    } else if (a == "--shader") {
+      shader = true;
     } else if (a == "--present") {
       present = true;
     } else if (a == "--present-seconds" && i + 1 < argc) {
@@ -63,7 +79,8 @@ int main(int argc, char** argv) {
     } else if (a == "--help" || a == "-h") {
       std::cout << "fable2-vk-smoke [--validation] [--device NAME] [--report FILE]\n"
                    "                [--cache FILE] [--budget-mb N]\n"
-                   "                [--renderpass] [--pipeline] [--texture]\n"
+                   "                [--renderpass] [--pipeline] [--texture] [--rt]\n"
+                   "                [--shared] [--draw]\n"
                    "                [--present] [--present-seconds N] [--no-vsync]\n"
                    "                [--tear] [--resize] [--cap N] [--pw W] [--ph H]\n";
       return 0;
@@ -74,6 +91,18 @@ int main(int argc, char** argv) {
   }
   if (texture) {
     return fable2::renderer::vulkan::RunTextureSmokeTest(cfg, report);
+  }
+  if (rt) {
+    return fable2::renderer::vulkan::RunRenderTargetSmokeTest(cfg, report);
+  }
+  if (shared) {
+    return fable2::renderer::vulkan::RunSharedBlitSmokeTest(cfg, report);
+  }
+  if (draw) {
+    return fable2::renderer::vulkan::RunDrawSmokeTest(cfg, report);
+  }
+  if (shader) {
+    return fable2::renderer::vulkan::RunShaderSmokeTest(cfg, report);
   }
   if (renderpass) {
     return fable2::renderer::vulkan::RunRenderPassSmokeTest(cfg, report);

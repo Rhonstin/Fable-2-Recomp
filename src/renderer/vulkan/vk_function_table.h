@@ -133,6 +133,8 @@ struct Functions {
   PFN_vkCmdBlitImage vkCmdBlitImage = nullptr;
   PFN_vkCmdResolveImage vkCmdResolveImage = nullptr;
   PFN_vkCmdClearColorImage vkCmdClearColorImage = nullptr;
+  PFN_vkCmdClearDepthStencilImage vkCmdClearDepthStencilImage = nullptr;  // W6 depth RT
+  PFN_vkCmdFillBuffer vkCmdFillBuffer = nullptr;  // W7 buffer fill
 
   // W4: pipeline state, descriptor sets, samplers, dynamic state, draw.
   PFN_vkCreateShaderModule vkCreateShaderModule = nullptr;
@@ -154,6 +156,7 @@ struct Functions {
   PFN_vkCmdBindPipeline vkCmdBindPipeline = nullptr;
   PFN_vkCmdBindDescriptorSets vkCmdBindDescriptorSets = nullptr;
   PFN_vkCmdBindVertexBuffers vkCmdBindVertexBuffers = nullptr;
+  PFN_vkCmdBindIndexBuffer vkCmdBindIndexBuffer = nullptr;  // W8 indexed draws
   PFN_vkCmdDraw vkCmdDraw = nullptr;
   PFN_vkCmdDrawIndexed vkCmdDrawIndexed = nullptr;
   PFN_vkCmdSetViewport vkCmdSetViewport = nullptr;

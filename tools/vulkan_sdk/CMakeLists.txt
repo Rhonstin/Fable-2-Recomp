@@ -89,7 +89,10 @@ if(REXGLUE_USE_VULKAN)
         ${FABLE2_RENDERER_ROOT}/src/renderer/vulkan/render_pass_manager.cpp
         ${FABLE2_RENDERER_ROOT}/src/renderer/vulkan/descriptor_manager.cpp
         ${FABLE2_RENDERER_ROOT}/src/renderer/vulkan/pipeline_manager.cpp
-        ${FABLE2_RENDERER_ROOT}/src/renderer/vulkan/texture_cache.cpp)
+        ${FABLE2_RENDERER_ROOT}/src/renderer/vulkan/texture_cache.cpp
+        ${FABLE2_RENDERER_ROOT}/src/renderer/vulkan/render_target_cache.cpp
+        ${FABLE2_RENDERER_ROOT}/src/renderer/vulkan/shared_memory.cpp
+        ${FABLE2_RENDERER_ROOT}/src/renderer/vulkan/draw_dispatch.cpp)
 
     set(FABLE2VULKAN_SOURCES
         ${FABLE2_RENDERER_ROOT}/src/renderer/plugin_main.cpp
@@ -179,6 +182,10 @@ if(REXGLUE_USE_VULKAN)
         ${FABLE2_RENDERER_ROOT}/src/renderer/vulkan/vk_renderpass_smoke.cpp
         ${FABLE2_RENDERER_ROOT}/src/renderer/vulkan/vk_pipeline_smoke.cpp
         ${FABLE2_RENDERER_ROOT}/src/renderer/vulkan/vk_texture_smoke.cpp
+        ${FABLE2_RENDERER_ROOT}/src/renderer/vulkan/vk_rt_smoke.cpp
+        ${FABLE2_RENDERER_ROOT}/src/renderer/vulkan/vk_shared_blit_smoke.cpp
+        ${FABLE2_RENDERER_ROOT}/src/renderer/vulkan/vk_draw_smoke.cpp
+        ${FABLE2_RENDERER_ROOT}/src/renderer/vulkan/vk_shader_smoke.cpp
         ${FABLE2_RENDERER_ROOT}/src/renderer/vulkan/vk_smoke_main.cpp)
     target_include_directories(fable2-vk-smoke PRIVATE
         ${FABLE2_RENDERER_ROOT}/src/renderer
