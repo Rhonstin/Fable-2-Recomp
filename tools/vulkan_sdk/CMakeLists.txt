@@ -169,7 +169,9 @@ if(REXGLUE_USE_VULKAN)
     # ------------------------------------------------------------------
     add_executable(fable2-vk-smoke
         ${FABLE2_VKFOUNDATION_SOURCES}
+        ${FABLE2_RENDERER_ROOT}/src/renderer/vulkan/frame_presenter.cpp
         ${FABLE2_RENDERER_ROOT}/src/renderer/vulkan/vk_smoke.cpp
+        ${FABLE2_RENDERER_ROOT}/src/renderer/vulkan/vk_present_smoke.cpp
         ${FABLE2_RENDERER_ROOT}/src/renderer/vulkan/vk_smoke_main.cpp)
     target_include_directories(fable2-vk-smoke PRIVATE
         ${FABLE2_RENDERER_ROOT}/src/renderer

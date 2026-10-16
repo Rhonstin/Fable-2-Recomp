@@ -45,6 +45,13 @@ struct Functions {
   PFN_vkGetPhysicalDeviceFormatProperties vkGetPhysicalDeviceFormatProperties = nullptr;
   PFN_vkSetDebugUtilsObjectNameEXT vkSetDebugUtilsObjectNameEXT = nullptr;
 
+  // Surface / presentation queries (instance level; need a VkSurfaceKHR).
+  PFN_vkDestroySurfaceKHR vkDestroySurfaceKHR = nullptr;
+  PFN_vkGetPhysicalDeviceSurfaceSupportKHR vkGetPhysicalDeviceSurfaceSupportKHR = nullptr;
+  PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR vkGetPhysicalDeviceSurfaceCapabilitiesKHR = nullptr;
+  PFN_vkGetPhysicalDeviceSurfaceFormatsKHR vkGetPhysicalDeviceSurfaceFormatsKHR = nullptr;
+  PFN_vkGetPhysicalDeviceSurfacePresentModesKHR vkGetPhysicalDeviceSurfacePresentModesKHR = nullptr;
+
   // ---- Device level. ----
   PFN_vkCreateDevice vkCreateDevice = nullptr;
   PFN_vkDestroyDevice vkDestroyDevice = nullptr;
@@ -93,12 +100,30 @@ struct Functions {
   PFN_vkBeginCommandBuffer vkBeginCommandBuffer = nullptr;
   PFN_vkEndCommandBuffer vkEndCommandBuffer = nullptr;
   PFN_vkResetCommandBuffer vkResetCommandBuffer = nullptr;
+  PFN_vkCmdBeginRenderPass vkCmdBeginRenderPass = nullptr;
+  PFN_vkCmdEndRenderPass vkCmdEndRenderPass = nullptr;
   PFN_vkQueueSubmit vkQueueSubmit = nullptr;
   PFN_vkCreateFence vkCreateFence = nullptr;
   PFN_vkDestroyFence vkDestroyFence = nullptr;
+  PFN_vkResetFences vkResetFences = nullptr;
   PFN_vkWaitForFences vkWaitForFences = nullptr;
+  PFN_vkCreateSemaphore vkCreateSemaphore = nullptr;
+  PFN_vkDestroySemaphore vkDestroySemaphore = nullptr;
   PFN_vkQueueWaitIdle vkQueueWaitIdle = nullptr;
   PFN_vkDeviceWaitIdle vkDeviceWaitIdle = nullptr;
+
+  // Presentation (swapchain extension + core image/render-pass resources).
+  PFN_vkCreateSwapchainKHR vkCreateSwapchainKHR = nullptr;
+  PFN_vkGetSwapchainImagesKHR vkGetSwapchainImagesKHR = nullptr;
+  PFN_vkDestroySwapchainKHR vkDestroySwapchainKHR = nullptr;
+  PFN_vkAcquireNextImageKHR vkAcquireNextImageKHR = nullptr;
+  PFN_vkQueuePresentKHR vkQueuePresentKHR = nullptr;
+  PFN_vkCreateImageView vkCreateImageView = nullptr;
+  PFN_vkDestroyImageView vkDestroyImageView = nullptr;
+  PFN_vkCreateRenderPass vkCreateRenderPass = nullptr;
+  PFN_vkDestroyRenderPass vkDestroyRenderPass = nullptr;
+  PFN_vkCreateFramebuffer vkCreateFramebuffer = nullptr;
+  PFN_vkDestroyFramebuffer vkDestroyFramebuffer = nullptr;
 
   // Phase 1: load the loader library and resolve the global functions.
   bool LoadGlobal(const char* loader_name, std::string& err);

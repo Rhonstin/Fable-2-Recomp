@@ -1,11 +1,19 @@
 # Custom Vulkan Renderer (rexgpu-fable2vulkan)
 
-**STATUS: M0 VERIFIED + W1 (Vulkan foundation) COMPLETE** — the plugin ABI,
-graphics-system, command-processor seam, CMake target, build script, launch/
-config selection and the `[gpu]` config key are all in place, and the
-`rexgpu-fable2vulkan.dll` plugin **loads in-game and renders Fable 2 over
-Vulkan** (Vulkan device on the host GPU + swapchain + presenting frames). The
-game still ships with the stock `rexgpu-xenos` D3D12 plugin as the default.
+**STATUS: M0 VERIFIED + W1 (foundation) + W2 (frame sync/present) CORE
+COMPLETE** — the plugin ABI, graphics-system, command-processor seam, CMake
+target, build script, launch/config selection and the `[gpu]` config key are
+all in place, and the `rexgpu-fable2vulkan.dll` plugin **loads in-game and
+renders Fable 2 over Vulkan** (Vulkan device on the host GPU + swapchain +
+presenting frames). The game still ships with the stock `rexgpu-xenos` D3D12
+plugin as the default. **Workstreams 1 + 2 are done and verified**: a
+self-contained `fable2::renderer::vulkan::VkContext` (W1) plus a self-contained
+`FramePresenter` (W2 — swapchain + N-in-flight frame-sync ring + vblank
+pacing + resize/recreate) both pass standalone `fable2-vk-smoke` self-tests on
+real hardware (headless W1; windowed `--present` W2). This plan
+tracks the full effort of remaking the Fable 2 renderer as a from-scratch,
+high-performance Vulkan backend that runs on all systems.
+
 **Workstream 1 is done and verified**: a self-contained
 `fable2::renderer::vulkan::VkContext` (dynamic Vulkan loader, VMA, in-memory +
 on-disk pipeline cache, per-pool memory tracker with a hard budget, optional
@@ -16,6 +24,22 @@ high-performance Vulkan backend that runs on all systems.
 
 ## Progress log
 
+- **W2 core complete (2026):** `src/renderer/vulkan/frame_presenter.{h,cpp}` —
+  a self-contained swapchain + N-in-flight frame-sync ring on `VkContext`.
+  Per-slot fence (signaled on submit) + acquire/render-complete semaphores +
+  one-time command pool/buffer; finite-timeout `vkAcquireNextImageKHR` (skip
+  present on timeout) + finite-timeout slot-fence wait (drop frame when the GPU
+  is behind) = "skip present rather than block". Present-mode selection (FIFO
+  vsync-on / MAILBOX·IMMEDIATE vsync-off), a `targetFps` vblank-pacing cap,
+  and resize/recreate (retire + rebuild, `oldSwapchain` image reuse) with
+  `VK_SUBOPTIMAL`/`VK_ERROR_OUT_OF_DATE_KHR` handling. The windowed
+  `fable2-vk-smoke --present` self-test verifies on the RTX 3070: 145 fps
+  (FIFO, capped to the 144 Hz panel), ~8,500 fps (MAILBOX uncapped), ~54/29 fps
+  (`--cap 60`/`30` guest-cadence pacing), and a mid-run resize → recreate with
+  graceful fence-timeout frame-drops while presenting continues. W1 headless
+  self-test + the plugin DLL still build/pass. `FramePresenter` is wired into
+  the live render path in W9 (the plugin still presents via the subclassed SDK
+  presenter until then).
 - Scaffold authored: `src/renderer/{plugin_main.cpp,
   fable2_vulkan_graphics_system.h/.cpp, fable2_vulkan_command_processor.h}`;
   CMake target `rexgpu-fable2vulkan` in `tools/vulkan_sdk/CMakeLists.txt` (the
@@ -189,24 +213,56 @@ stats).
       `IsSufficient` gate lists all missing capabilities and returns false so
       the app falls back to the stock renderer instead of hard-failing.
 
-## Workstream 2 — Frame sync & presentation (next)
+## Workstream 2 — Frame sync & presentation
 
-- [ ] Frame synchronizer: N in-flight frames (default 2–3); per-frame
-      `VkFence`/`VkSemaphore` ring; `vkAcquireNextImage` with timeout +
-      timeout fallback (skip present rather than block).
-- [ ] Swapchain: sized to the window, `VK_PRESENT_MODE_FIFO` (vsync on) /
-      `VK_PRESENT_MODE_MAILBOX` or `IMMEDIATE` (vsync off / unlimited);
-      recreate on resize with graceful frame-dropping.
-- [ ] Vblank pacing: match the guest vblank cadence from the SDK vsync worker
-      (`guest_vblank_pacing` cvar); decouple guest frame production from host
-      present when uncapped.
-- [ ] Present the final composite to the swapchain image; handle
-      `VK_SUBOPTIMAL` (recreate) and `VK_ERROR_OUT_OF_DATE_KHR`.
+**STATUS: CORE COMPLETE (verified by `fable2-vk-smoke --present`).** A
+self-contained `fable2::renderer::vulkan::FramePresenter` in
+`src/renderer/vulkan/frame_presenter.{h,cpp}` — swapchain + an N-in-flight
+frame-sync ring built on `VkContext`. Proven on the RTX 3070 by the windowed
+`fable2-vk-smoke --present` self-test: vsync-on (FIFO) caps to the display
+refresh (145 fps on a 144 Hz panel), vsync-off (MAILBOX/IMMEDIATE) runs
+uncapped (~8,500 fps), a `--cap N` paces the host present to the guest cadence
+(~54 fps at cap 60, ~29 fps at cap 30), and a mid-run window resize triggers a
+swapchain recreate with graceful frame-dropping (fence-timeout drops) while
+presenting continues.
+
+- [x] Frame synchronizer: N in-flight frames (default 3, matching the SDK's
+      `kSubmissionCount`); per-slot `VkFence` (signaled on submit) + acquire
+      semaphore + render-complete semaphore + one-time command pool/buffer;
+      `vkAcquireNextImageKHR` with a finite timeout → **skip present rather
+      than block**; the slot-fence wait also times out → **drop the frame** so
+      the ring keeps moving when the GPU is behind.
+- [x] Swapchain: sized to the window (clamped to the surface's
+      min/max image extent), `VK_PRESENT_MODE_FIFO` (vsync on) /
+      `VK_PRESENT_MODE_MAILBOX` or `IMMEDIATE` (vsync off); **recreate on
+      resize** (retire + rebuild, reusing images via `oldSwapchain`) with
+      graceful frame-dropping; format/mode/extent picked from the surface
+      capabilities (B8G8R8A8 preferred, opaque composite, identity transform).
+- [x] Vblank pacing: `targetFps` cap paces the host present to the guest
+      cadence (1e9/targetFps ns per frame, sleep-based); `targetFps = 0`
+      runs uncapped. **Decoupling proven**: the same swapchain presents at
+      145 fps (FIFO), 8,500 fps (MAILBOX uncapped), or an arbitrary
+      guest-matched rate (cap 30/60). Matching the SDK `guest_vblank_pacing`
+      cvar exactly is a W9 integration concern (set `targetFps` from the guest
+      refresh rate once the command processor drives the presenter).
+- [x] Present the final composite to the swapchain image; handle
+      `VK_SUBOPTIMAL` (recreate-when-convenient) and `VK_ERROR_OUT_OF_DATE_KHR`
+      / surface-lost (recreate now). The presenter owns a single-color-
+      attachment render pass (UNDEFINED → PRESENT_SRC) + per-image framebuffers
+      and exposes the raw swapchain images/views so W3+ can build its own passes.
 - [ ] Overlay/UI compositing: draw the SDK UI/ImGui pass into the same frame
-      after the game render (reuse `ui::vulkan` presenter ordering).
+      after the game render (reuse `ui::vulkan` presenter ordering). — *hook
+      in place (the swapchain images/views are exposed); full UI compositing
+      lands with the W9 command-processor rewrite.*
 - [ ] Render-target readback path: implement the `readback_resolve_force_addresses`
       mechanism (hero/dog texture fix) in the new renderer so the existing
-      config keeps working.
+      config keeps working. — *game-specific; lands with the W9/W7 rewrite.*
+
+**Note:** `FramePresenter` is a standalone module proven by the smoke test. It
+is wired into the live render path (replacing the SDK `ui::vulkan` presenter)
+in the W9 command-processor workstream, following the reuse-then-rewrite
+strategy. Until then the plugin still presents via the subclassed SDK
+presenter.
 
 ## Workstream 3 — Render passes & subpass design
 
@@ -467,9 +523,30 @@ src/renderer/
   plugin_main.cpp                 # ABI exports
   fable2_vulkan_graphics_system.h/.cpp   # IGraphicsSystem impl (thin)
   vulkan/
-    vk_context.h/.cpp             # instance/device/queues/VMA
-    frame_sync.h/.cpp             # swapchain + fences/semaphores
+    # --- W1 (done) ---
+    vk_dynlib.h                   # self-contained Win32/POSIX loader
+    vk_function_table.h/.cpp      # dynamic Vulkan loader (3-phase resolve)
+    vk_context.h/.cpp             # instance/device/queues/VMA/capabilities
+    memory_tracker.h/.cpp         # per-pool + per-frame GPU-memory budget
+    pipeline_cache.h/.cpp         # in-mem + on-disk pipeline cache
+    spirv_tools.h/.cpp            # runtime SPIRV-Tools context
+    # --- W2 (done) ---
+    frame_presenter.h/.cpp        # swapchain + N-in-flight frame-sync ring
+    # --- W2/W1 self-tests (done) ---
+    vk_smoke.h/.cpp               # headless W1 VkContext self-test
+    vk_present_smoke.h/.cpp       # windowed W2 present self-test
+    vk_smoke_main.cpp             # `fable2-vk-smoke` console entry point
+    # --- W3+ (proposed) ---
     render_pass.h/.cpp            # render pass + framebuffer cache
+    descriptor_manager.h/.cpp     # set pools, layout cache, bindless arrays
+    texture_cache.h/.cpp          # guest image manager
+    render_target_cache.h/.cpp    # guest framebuffer manager
+    shared_memory.h/.cpp          # guest SHARED region manager
+    primitive_processor.h/.cpp    # topology/draw dispatch
+    command_processor.h/.cpp      # guest packet -> command encoding (hot path)
+    shader.h/.cpp                 # SPIR-V -> VkShaderModule + assembly
+    postfx.h/.cpp                 # FXAA/gamma fullscreen passes
+    # (W4's pipeline_manager is subsumed by pipeline_cache + a layout cache)
     descriptor_manager.h/.cpp     # set pools, layout cache, bindless arrays
     pipeline_manager.h/.cpp       # pipeline cache (in-mem + on-disk)
     texture_cache.h/.cpp          # guest image manager

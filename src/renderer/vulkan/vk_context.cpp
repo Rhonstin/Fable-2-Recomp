@@ -182,11 +182,12 @@ bool VkContext::CreateInstance(std::string& err) {
   requested.emplace_back("VK_KHR_portability_enumeration");
   if (config_.withPresentation) {
     requested.emplace_back("VK_KHR_surface");
-#if defined(VK_USE_PLATFORM_WIN32_KHR)
+    // The vendor headers in this tree do not auto-define the VK_USE_PLATFORM_*
+    // macros, so branch on the OS directly to pick the right surface extension.
+#if defined(_WIN32)
     requested.emplace_back("VK_KHR_win32_surface");
-#elif defined(VK_USE_PLATFORM_XCB_KHR)
+#elif defined(__linux__)
     requested.emplace_back("VK_KHR_xcb_surface");
-#elif defined(VK_USE_PLATFORM_WAYLAND_KHR)
     requested.emplace_back("VK_KHR_wayland_surface");
 #endif
   }

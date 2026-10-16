@@ -64,6 +64,13 @@ bool Functions::LoadInstance(VkInstance instance, std::string& err) {
   FABLE2_INST(vkGetPhysicalDeviceFormatProperties);
   FABLE2_INST(vkCreateDevice);
   FABLE2_INST(vkSetDebugUtilsObjectNameEXT);
+  // Surface / presentation queries (resolved even when no surface is created;
+  // the caller only uses them when it has a VkSurfaceKHR).
+  FABLE2_INST(vkDestroySurfaceKHR);
+  FABLE2_INST(vkGetPhysicalDeviceSurfaceSupportKHR);
+  FABLE2_INST(vkGetPhysicalDeviceSurfaceCapabilitiesKHR);
+  FABLE2_INST(vkGetPhysicalDeviceSurfaceFormatsKHR);
+  FABLE2_INST(vkGetPhysicalDeviceSurfacePresentModesKHR);
 #undef FABLE2_INST
 
   if (!vkEnumeratePhysicalDevices || !vkCreateDevice) {
@@ -131,12 +138,29 @@ bool Functions::LoadDevice(VkDevice device, std::string& err) {
   FABLE2_DEV(vkBeginCommandBuffer);
   FABLE2_DEV(vkEndCommandBuffer);
   FABLE2_DEV(vkResetCommandBuffer);
+  FABLE2_DEV(vkCmdBeginRenderPass);
+  FABLE2_DEV(vkCmdEndRenderPass);
   FABLE2_DEV(vkQueueSubmit);
   FABLE2_DEV(vkCreateFence);
   FABLE2_DEV(vkDestroyFence);
+  FABLE2_DEV(vkResetFences);
   FABLE2_DEV(vkWaitForFences);
+  FABLE2_DEV(vkCreateSemaphore);
+  FABLE2_DEV(vkDestroySemaphore);
   FABLE2_DEV(vkQueueWaitIdle);
   FABLE2_DEV(vkDeviceWaitIdle);
+  // Presentation (swapchain extension + core image / render-pass resources).
+  FABLE2_DEV(vkCreateSwapchainKHR);
+  FABLE2_DEV(vkGetSwapchainImagesKHR);
+  FABLE2_DEV(vkDestroySwapchainKHR);
+  FABLE2_DEV(vkAcquireNextImageKHR);
+  FABLE2_DEV(vkQueuePresentKHR);
+  FABLE2_DEV(vkCreateImageView);
+  FABLE2_DEV(vkDestroyImageView);
+  FABLE2_DEV(vkCreateRenderPass);
+  FABLE2_DEV(vkDestroyRenderPass);
+  FABLE2_DEV(vkCreateFramebuffer);
+  FABLE2_DEV(vkDestroyFramebuffer);
 #undef FABLE2_DEV
 
   if (!vkAllocateMemory || !vkCreateBuffer || !vkGetDeviceQueue) {

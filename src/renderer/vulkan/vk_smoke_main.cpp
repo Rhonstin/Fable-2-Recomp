@@ -10,12 +10,15 @@
 #include <iostream>
 #include <string>
 
+#include "vk_present_smoke.h"
 #include "vk_smoke.h"
 
 int main(int argc, char** argv) {
   setvbuf(stdout, nullptr, _IONBF, 0);  // unbuffered so a crash loses no output
   fable2::renderer::vulkan::VkContextConfig cfg;
+  fable2::renderer::vulkan::PresentSmokeConfig psmoke;
   std::string report;
+  bool present = false;
   for (int i = 1; i < argc; ++i) {
     const std::string a = argv[i];
     if (a == "--validation") {
@@ -28,11 +31,33 @@ int main(int argc, char** argv) {
       cfg.pipelineCachePath = argv[++i];
     } else if (a == "--budget-mb" && i + 1 < argc) {
       cfg.memoryBudgetBytes = static_cast<uint64_t>(std::stoul(argv[++i])) * 1024 * 1024;
+    } else if (a == "--present") {
+      present = true;
+    } else if (a == "--present-seconds" && i + 1 < argc) {
+      present = true;
+      psmoke.seconds = std::stod(argv[++i]);
+    } else if (a == "--no-vsync") {
+      psmoke.vsync = false;
+    } else if (a == "--tear") {
+      psmoke.allowImmediate = true;
+    } else if (a == "--resize") {
+      psmoke.doResize = true;
+    } else if (a == "--pw" && i + 1 < argc) {
+      psmoke.width = static_cast<uint32_t>(std::stoul(argv[++i]));
+    } else if (a == "--ph" && i + 1 < argc) {
+      psmoke.height = static_cast<uint32_t>(std::stoul(argv[++i]));
+    } else if (a == "--cap" && i + 1 < argc) {
+      psmoke.capFps = std::stod(argv[++i]);
     } else if (a == "--help" || a == "-h") {
       std::cout << "fable2-vk-smoke [--validation] [--device NAME] [--report FILE]\n"
-                   "                [--cache FILE] [--budget-mb N]\n";
+                   "                [--cache FILE] [--budget-mb N]\n"
+                   "                [--present] [--present-seconds N] [--no-vsync]\n"
+                   "                [--tear] [--resize] [--cap N] [--pw W] [--ph H]\n";
       return 0;
     }
+  }
+  if (present) {
+    return fable2::renderer::vulkan::RunPresentSmokeTest(cfg, psmoke, report);
   }
   return fable2::renderer::vulkan::RunSmokeTest(cfg, report);
 }
