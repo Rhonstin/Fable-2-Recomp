@@ -161,6 +161,12 @@ bool Functions::LoadDevice(VkDevice device, std::string& err) {
   FABLE2_DEV(vkDestroyRenderPass);
   FABLE2_DEV(vkCreateFramebuffer);
   FABLE2_DEV(vkDestroyFramebuffer);
+  // Transfer / layout (W3 downscale/resolve + RTT compositing).
+  FABLE2_DEV(vkCmdPipelineBarrier);
+  FABLE2_DEV(vkCmdCopyImage);
+  FABLE2_DEV(vkCmdBlitImage);
+  FABLE2_DEV(vkCmdResolveImage);
+  FABLE2_DEV(vkCmdClearColorImage);
 #undef FABLE2_DEV
 
   if (!vkAllocateMemory || !vkCreateBuffer || !vkGetDeviceQueue) {

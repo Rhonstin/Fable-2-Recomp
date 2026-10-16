@@ -85,7 +85,8 @@ if(REXGLUE_USE_VULKAN)
         ${FABLE2_RENDERER_ROOT}/src/renderer/vulkan/memory_tracker.cpp
         ${FABLE2_RENDERER_ROOT}/src/renderer/vulkan/pipeline_cache.cpp
         ${FABLE2_RENDERER_ROOT}/src/renderer/vulkan/spirv_tools.cpp
-        ${FABLE2_RENDERER_ROOT}/src/renderer/vulkan/vk_context.cpp)
+        ${FABLE2_RENDERER_ROOT}/src/renderer/vulkan/vk_context.cpp
+        ${FABLE2_RENDERER_ROOT}/src/renderer/vulkan/render_pass_manager.cpp)
 
     set(FABLE2VULKAN_SOURCES
         ${FABLE2_RENDERER_ROOT}/src/renderer/plugin_main.cpp
@@ -172,6 +173,7 @@ if(REXGLUE_USE_VULKAN)
         ${FABLE2_RENDERER_ROOT}/src/renderer/vulkan/frame_presenter.cpp
         ${FABLE2_RENDERER_ROOT}/src/renderer/vulkan/vk_smoke.cpp
         ${FABLE2_RENDERER_ROOT}/src/renderer/vulkan/vk_present_smoke.cpp
+        ${FABLE2_RENDERER_ROOT}/src/renderer/vulkan/vk_renderpass_smoke.cpp
         ${FABLE2_RENDERER_ROOT}/src/renderer/vulkan/vk_smoke_main.cpp)
     target_include_directories(fable2-vk-smoke PRIVATE
         ${FABLE2_RENDERER_ROOT}/src/renderer

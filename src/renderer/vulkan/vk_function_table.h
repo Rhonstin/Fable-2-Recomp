@@ -125,6 +125,13 @@ struct Functions {
   PFN_vkCreateFramebuffer vkCreateFramebuffer = nullptr;
   PFN_vkDestroyFramebuffer vkDestroyFramebuffer = nullptr;
 
+  // Transfer / layout (W3 downscale/resolve + RTT compositing).
+  PFN_vkCmdPipelineBarrier vkCmdPipelineBarrier = nullptr;
+  PFN_vkCmdCopyImage vkCmdCopyImage = nullptr;
+  PFN_vkCmdBlitImage vkCmdBlitImage = nullptr;
+  PFN_vkCmdResolveImage vkCmdResolveImage = nullptr;
+  PFN_vkCmdClearColorImage vkCmdClearColorImage = nullptr;
+
   // Phase 1: load the loader library and resolve the global functions.
   bool LoadGlobal(const char* loader_name, std::string& err);
   // Phase 2: resolve instance-level functions.

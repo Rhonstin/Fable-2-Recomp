@@ -1,17 +1,19 @@
 # Custom Vulkan Renderer (rexgpu-fable2vulkan)
 
-**STATUS: M0 VERIFIED + W1 (foundation) + W2 (frame sync/present) CORE
-COMPLETE** — the plugin ABI, graphics-system, command-processor seam, CMake
-target, build script, launch/config selection and the `[gpu]` config key are
-all in place, and the `rexgpu-fable2vulkan.dll` plugin **loads in-game and
-renders Fable 2 over Vulkan** (Vulkan device on the host GPU + swapchain +
-presenting frames). The game still ships with the stock `rexgpu-xenos` D3D12
-plugin as the default. **Workstreams 1 + 2 are done and verified**: a
-self-contained `fable2::renderer::vulkan::VkContext` (W1) plus a self-contained
-`FramePresenter` (W2 — swapchain + N-in-flight frame-sync ring + vblank
-pacing + resize/recreate) both pass standalone `fable2-vk-smoke` self-tests on
-real hardware (headless W1; windowed `--present` W2). This plan
-tracks the full effort of remaking the Fable 2 renderer as a from-scratch,
+**STATUS: M0 VERIFIED + W1 (foundation) + W2 (frame sync/present) + W3
+(render passes) CORE COMPLETE** — the plugin ABI, graphics-system,
+command-processor seam, CMake target, build script, launch/config selection and
+the `[gpu]` config key are all in place, and the `rexgpu-fable2vulkan.dll`
+plugin **loads in-game and renders Fable 2 over Vulkan** (Vulkan device on the
+host GPU + swapchain + presenting frames). The game still ships with the stock
+`rexgpu-xenos` D3D12 plugin as the default. **Workstreams 1 + 2 + 3 are done
+and verified**: a self-contained `fable2::renderer::vulkan::VkContext` (W1), a
+self-contained `FramePresenter` (W2 — swapchain + N-in-flight frame-sync ring +
+vblank pacing + resize/recreate), and a self-contained `RenderPassManager`
+(W3 — cached render passes + framebuffers + MSAA/resolve + framebuffer-fetch +
+blit downscale/composite) all pass standalone `fable2-vk-smoke` self-tests on
+real hardware (headless W1/`--renderpass` W3; windowed `--present` W2). This
+plan tracks the full effort of remaking the Fable 2 renderer as a from-scratch,
 high-performance Vulkan backend that runs on all systems.
 
 **Workstream 1 is done and verified**: a self-contained
@@ -24,6 +26,23 @@ high-performance Vulkan backend that runs on all systems.
 
 ## Progress log
 
+- **W3 core complete (2026):** `src/renderer/vulkan/render_pass_manager.{h,cpp}`
+  — a cached set of `VkRenderPass` + `VkFramebuffer` on `VkContext`, keyed by
+  `RenderPassKey` (color/depth format, MSAA sample counts, in-pass resolve,
+  load/store ops, framebuffer-fetch flag). The guest-frame model (scene →
+  downscale/resolve → composite) is proven by the headless
+  `fable2-vk-smoke --renderpass` self-test: 7 distinct pass variants created
+  (color-only CLEAR/LOAD, color+depth, MSAA4+resolve, MSAA4+resolve+depth,
+  framebuffer-fetch, framebuffer-fetch+depth), cache verified (same key → same
+  handle + hit; different key → different handle; 7 unique / 2 hits), a
+  framebuffer built over each, every pass recorded + submitted + executed, and
+  a scene→256→128 downscale→128→256 composite blit pipeline over off-screen
+  RTTs. The framebuffer-fetch feedback loop (color attachment also a subpass
+  input attachment in the same subpass) is accepted + executed by the driver.
+  MSAA sample counts are now exposed on `Capabilities`
+  (`msaa*SampleCounts` + `ClampMsaa()`); `vkCmdPipelineBarrier`/`CopyImage`/
+  `BlitImage`/`ResolveImage`/`ClearColorImage` added to the function table.
+  `RenderPassManager` is wired into the live render path in W9.
 - **W2 core complete (2026):** `src/renderer/vulkan/frame_presenter.{h,cpp}` —
   a self-contained swapchain + N-in-flight frame-sync ring on `VkContext`.
   Per-slot fence (signaled on submit) + acquire/render-complete semaphores +
@@ -266,20 +285,62 @@ presenter.
 
 ## Workstream 3 — Render passes & subpass design
 
-- [ ] Model the guest frame as: guest scene render into guest RTs → optional
-      GPU-side downscale/resolve → final composite to swapchain.
-- [ ] Primary render pass over the swapchain image (color + optional MSAA
-      resolve subpass).
-- [ ] Guest-side render passes: color-only, color+depth, with/without MSAA,
+**STATUS: CORE COMPLETE (verified by `fable2-vk-smoke --renderpass`).** A
+self-contained `fable2::renderer::vulkan::RenderPassManager` in
+`src/renderer/vulkan/render_pass_manager.{h,cpp}` — a cached set of
+`VkRenderPass` + `VkFramebuffer` objects built on `VkContext`. The guest-frame
+model (scene → downscale/resolve → composite) is proven on the RTX 3070 by the
+headless `fable2-vk-smoke --renderpass` self-test, which creates 7 distinct
+pass variants (color-only CLEAR/LOAD, color+depth, MSAA4+resolve,
+MSAA4+resolve+depth, framebuffer-fetch, framebuffer-fetch+depth), verifies the
+cache (same key → same handle + hit; different key → different handle), builds
+a framebuffer over each, records + submits every pass, and runs a
+scene→downscale→composite blit pipeline over off-screen RTTs.
+
+- [x] Model the guest frame as: guest scene render into guest RTs → optional
+      GPU-side downscale/resolve → final composite to swapchain. — proven by
+      the `PipelineCompositeStage` blit test (scene clear → 256→128 downscale →
+      128→256 composite, all over off-screen RTTs).
+- [x] Primary render pass over the swapchain image (color + optional MSAA
+      resolve subpass). — `RenderPassManager` emits a single-subpass pass with
+      optional in-pass `pResolveAttachments` (MSAA→single-sample); the W2
+      `FramePresenter` already owns the swapchain pass for live presents.
+- [x] Guest-side render passes: color-only, color+depth, with/without MSAA,
       with/without depth writes — a small fixed set of cached render passes
       keyed by (attachments, MSAA, blend, sample count, framebuffer fetch).
-- [ ] Secondary render passes for render-to-texture (RTT) / off-screen guest
-      targets; blit/copy/resolve subpass or standalone compute.
-- [ ] Depth stencil: single-stencil, single-attachment, and MSAA-attachment
-      variants; correct layout transitions.
-- [ ] Framebuffer-fetch (Xenos `FETCH` / memory-export) path: emulate with
+      — cached in an `unordered_map<RenderPassKey, PassLayout>`; the key
+      captures attachments (color/depth format), MSAA (color/depth sample
+      counts + in-pass resolve), load/store ops, and the framebuffer-fetch
+      flag. *(Blend, sample masks, and depth-write-enable are pipeline state,
+      not render-pass state — they live in W4, so they intentionally do not
+      change the pass.)*
+- [x] Secondary render passes for render-to-texture (RTT) / off-screen guest
+      targets; blit/copy/resolve subpass or standalone compute. — the
+      `RenderPassManager` is surface-agnostic (any `VkImageView`), so every
+      test pass runs over off-screen RTs; blit/copy/resolve are exposed
+      (`vkCmdBlitImage`/`vkCmdCopyImage`/`vkCmdResolveImage`/`vkCmdPipelineBarrier`
+      added to the function table) and exercised by the composite stage.
+- [x] Depth stencil: single-stencil, single-attachment, and MSAA-attachment
+      variants; correct layout transitions. — `D24_UNORM_S8_UINT` at 1× and 4×
+      MSAA both created + executed; a static `MakeBarrier()` builds the
+      `VkImageMemoryBarrier`s for layout transitions.
+- [x] Framebuffer-fetch (Xenos `FETCH` / memory-export) path: emulate with
       dual-source blend / feedback loops (subpass input attachments) where
-      possible, fallback to read-and-reissue where not.
+      possible, fallback to read-and-reissue where not. — the feedback-loop
+      variant (color attachment also declared as a subpass *input* attachment
+      in the same subpass, layout `COLOR_ATTACHMENT_OPTIMAL`) is created and
+      executed successfully on the driver, so the renderer can express
+      per-pixel framebuffer fetch without an extra pass. *(The actual
+      read-and-reissue fallback and the GLSL `input` declaration land in W5
+      with the shader translator.)*
+
+**Note:** MSAA sample counts are read from
+`VkPhysicalDeviceLimits.framebuffer*SampleCounts` and exposed on `Capabilities`
+(`msaaColorSamples`/`msaaDepthSamples`/`msaaStencilSamples`) + a `ClampMsaa()`
+helper (the vendored `VkPhysicalDeviceProperties` predates the 1.1 sample-count
+fields, so they come from `limits`). `RenderPassManager` is wired into the live
+render path in W9 (with the command processor); until then the plugin still
+presents via the subclassed SDK renderer.
 
 ## Workstream 4 — Descriptor sets & pipeline state (the hot path)
 
@@ -532,12 +593,14 @@ src/renderer/
     spirv_tools.h/.cpp            # runtime SPIRV-Tools context
     # --- W2 (done) ---
     frame_presenter.h/.cpp        # swapchain + N-in-flight frame-sync ring
-    # --- W2/W1 self-tests (done) ---
+    # --- W3 (done) ---
+    render_pass_manager.h/.cpp    # cached render passes + framebuffers + blit
+    # --- W1/W2/W3 self-tests (done) ---
     vk_smoke.h/.cpp               # headless W1 VkContext self-test
     vk_present_smoke.h/.cpp       # windowed W2 present self-test
+    vk_renderpass_smoke.h/.cpp    # headless W3 render-pass self-test
     vk_smoke_main.cpp             # `fable2-vk-smoke` console entry point
-    # --- W3+ (proposed) ---
-    render_pass.h/.cpp            # render pass + framebuffer cache
+    # --- W4+ (proposed) ---
     descriptor_manager.h/.cpp     # set pools, layout cache, bindless arrays
     texture_cache.h/.cpp          # guest image manager
     render_target_cache.h/.cpp    # guest framebuffer manager

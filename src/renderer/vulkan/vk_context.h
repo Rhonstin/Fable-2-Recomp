@@ -82,6 +82,19 @@ struct Capabilities {
   VkDeviceSize nonCoherentAtomSize = 0;
   uint32_t memoryTypeCount = 0;
 
+  // MSAA sample-count support (from VkPhysicalDeviceLimits). Bit flags of
+  // VkSampleCountFlagBits. The renderer uses these to pick a supported sample
+  // count for color / depth / MSAA render passes (W3).
+  VkSampleCountFlags msaaColorSamples = 0;      // framebufferColorSampleCounts
+  VkSampleCountFlags msaaDepthSamples = 0;      // framebufferDepthSampleCounts
+  VkSampleCountFlags msaaStencilSamples = 0;    // framebufferStencilSampleCounts
+  VkSampleCountFlags msaaNoAttachmentSamples = 0;  // framebufferNoAttachmentsSampleCounts
+
+  // The largest supported MSAA color sample count that is at least `requested`
+  // (rounded down to the nearest supported 1/2/4/8/16); falls back to 1 when
+  // none of 2/4/8/16 are supported. Returns a power-of-two sample count.
+  VkSampleCountFlagBits ClampMsaa(VkSampleCountFlagBits requested) const;
+
   // Presentation.
   bool presentationSupported = false;
 

@@ -46,6 +46,28 @@ bool Capabilities::IsSufficient(std::vector<std::string>* missing) const {
   return ok;
 }
 
+VkSampleCountFlagBits Capabilities::ClampMsaa(VkSampleCountFlagBits requested) const {
+  // Prefer the largest supported count at or below `requested`; if none is
+  // supported (or 1 is requested), return 1 (no MSAA).
+  VkSampleCountFlags want = static_cast<VkSampleCountFlags>(requested);
+  if (requested == VK_SAMPLE_COUNT_1_BIT) {
+    return VK_SAMPLE_COUNT_1_BIT;
+  }
+  // Check from the largest supported count down to 1, returning the first that
+  // is <= requested. Order: 16, 8, 4, 2, 1.
+  static const VkSampleCountFlagBits kOrder[] = {
+      VK_SAMPLE_COUNT_16_BIT, VK_SAMPLE_COUNT_8_BIT, VK_SAMPLE_COUNT_4_BIT,
+      VK_SAMPLE_COUNT_2_BIT,  VK_SAMPLE_COUNT_1_BIT,
+  };
+  for (VkSampleCountFlagBits s : kOrder) {
+    const VkSampleCountFlags sf = static_cast<VkSampleCountFlags>(s);
+    if (sf <= want && (msaaColorSamples & sf)) {
+      return s;
+    }
+  }
+  return VK_SAMPLE_COUNT_1_BIT;
+}
+
 // ---------------------------------------------------------------------------
 // VkContext
 // ---------------------------------------------------------------------------
@@ -389,6 +411,10 @@ bool VkContext::SelectDevice(std::string& err) {
   caps.minStorageBufferOffsetAlignment =
       chosen->props.limits.minStorageBufferOffsetAlignment;
   caps.nonCoherentAtomSize = chosen->props.limits.nonCoherentAtomSize;
+  caps.msaaColorSamples = chosen->props.limits.framebufferColorSampleCounts;
+  caps.msaaDepthSamples = chosen->props.limits.framebufferDepthSampleCounts;
+  caps.msaaStencilSamples = chosen->props.limits.framebufferStencilSampleCounts;
+  caps.msaaNoAttachmentSamples = chosen->props.limits.framebufferNoAttachmentsSampleCounts;
 
   // Device extension availability (to know what we can request).
   PFN_vkEnumerateDeviceExtensionProperties eprops =
