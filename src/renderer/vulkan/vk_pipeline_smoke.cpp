@@ -286,6 +286,7 @@ int RunPipelineSmokeTest(const VkContextConfig& config, const std::string& repor
   a.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
   a.alphaBlend = true;
   a.depthWrite = false;
+  a.cullMode = VK_CULL_MODE_NONE;  // test triangle is CW in the Vulkan (Y-down) viewport
 
   PipelineKey b = a;  // no blend (opaque).
   b.alphaBlend = false;
@@ -363,6 +364,35 @@ int RunPipelineSmokeTest(const VkContextConfig& config, const std::string& repor
     pm.BindAndDraw(cmdBuf, *pv, set, vbuf, 0, blendConsts, W, H, 3);
   }
   f.vkCmdEndRenderPass(cmdBuf);
+
+  // Read back: copy the RTT to a host-visible buffer to verify the draw wrote pixels.
+  VkBuffer rbBuffer;
+  VmaAllocation rbAlloc;
+  void* rbMap = nullptr;
+  ctx->AllocateBuffer(&rbBuffer, &rbAlloc, (VkDeviceSize)W * H * 4, VMA_MEMORY_USAGE_GPU_TO_CPU,
+                      VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                      &rbMap, err);
+  {
+    VkImageMemoryBarrier rtBar{};
+    rtBar.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    rtBar.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    rtBar.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+    rtBar.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    rtBar.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    rtBar.image = rt;
+    rtBar.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+    f.vkCmdPipelineBarrier(cmdBuf, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                           VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, &rtBar);
+    VkBufferImageCopy rbr{};
+    rbr.bufferOffset = 0;
+    rbr.bufferRowLength = 0;
+    rbr.bufferImageHeight = H;
+    rbr.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+    rbr.imageOffset = {0, 0, 0};
+    rbr.imageExtent = {W, H, 1};
+    f.vkCmdCopyImageToBuffer(cmdBuf, rt, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, rbBuffer, 1, &rbr);
+  }
   f.vkEndCommandBuffer(cmdBuf);
 
   VkFence fence;
@@ -378,6 +408,31 @@ int RunPipelineSmokeTest(const VkContextConfig& config, const std::string& repor
   line(submitRes == VK_SUCCESS && waitRes == VK_SUCCESS,
        "GPU executed " + std::to_string(kDraws) + " draws (submit=" +
            std::to_string(submitRes) + " wait=" + std::to_string(waitRes) + ")");
+
+  // Verify the draws actually wrote pixels (the clear was (0.1,0.1,0.1); the last
+  // draw's fragment is u_color + t*0.5, which for a textured sample is non-clear).
+  {
+    int cr = -1, cg = -1, cb = -1;
+    uint64_t nonClear = 0;
+    if (rbMap) {
+      const uint8_t* base = static_cast<const uint8_t*>(rbMap);
+      const uint8_t* c = base + ((H / 2) * W + (W / 2)) * 4;
+      cr = c[0];
+      cg = c[1];
+      cb = c[2];
+      for (uint32_t i = 0; i < W * H; i++) {
+        const uint8_t* p = base + i * 4;
+        if (p[0] > 40 || p[1] > 40 || p[2] > 40) {
+          nonClear++;
+        }
+      }
+    }
+    line(nonClear > 0,
+         "draws wrote pixels (nonClear=" + std::to_string(nonClear) +
+             ", centerRGB=" + std::to_string(cr) + "/" + std::to_string(cg) + "/" +
+             std::to_string(cb) + "; clear was 26,26,26)");
+    ctx->FreeBuffer(rbBuffer, rbAlloc);
+  }
   const bool steadyStateOk =
       pm.pipelineCreates() == 3 && pm.bindPipelineCalls() == kDraws && pm.drawCalls() == kDraws;
   line(steadyStateOk,

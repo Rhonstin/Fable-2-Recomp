@@ -164,6 +164,8 @@ bool Functions::LoadDevice(VkDevice device, std::string& err) {
   // Transfer / layout (W3 downscale/resolve + RTT compositing).
   FABLE2_DEV(vkCmdPipelineBarrier);
   FABLE2_DEV(vkCmdCopyImage);
+  FABLE2_DEV(vkCmdCopyImageToBuffer);
+  FABLE2_DEV(vkCmdCopyBufferToImage);
   FABLE2_DEV(vkCmdBlitImage);
   FABLE2_DEV(vkCmdResolveImage);
   FABLE2_DEV(vkCmdClearColorImage);

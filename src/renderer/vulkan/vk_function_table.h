@@ -128,6 +128,8 @@ struct Functions {
   // Transfer / layout (W3 downscale/resolve + RTT compositing).
   PFN_vkCmdPipelineBarrier vkCmdPipelineBarrier = nullptr;
   PFN_vkCmdCopyImage vkCmdCopyImage = nullptr;
+  PFN_vkCmdCopyImageToBuffer vkCmdCopyImageToBuffer = nullptr;
+  PFN_vkCmdCopyBufferToImage vkCmdCopyBufferToImage = nullptr;
   PFN_vkCmdBlitImage vkCmdBlitImage = nullptr;
   PFN_vkCmdResolveImage vkCmdResolveImage = nullptr;
   PFN_vkCmdClearColorImage vkCmdClearColorImage = nullptr;

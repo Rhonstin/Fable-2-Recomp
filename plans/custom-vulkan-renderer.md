@@ -1,7 +1,8 @@
 # Custom Vulkan Renderer (rexgpu-fable2vulkan)
 
 **STATUS: M0 VERIFIED + W1 (foundation) + W2 (frame sync/present) + W3
-(render passes) + W4 (descriptors/pipeline state) CORE COMPLETE** — the plugin ABI, graphics-system,
+(render passes) + W4 (descriptors/pipeline state) + W5 (texture cache) CORE
+COMPLETE** — the plugin ABI, graphics-system,
 command-processor seam, CMake target, build script, launch/config selection and
 the `[gpu]` config key are all in place, and the `rexgpu-fable2vulkan.dll`
 plugin **loads in-game and renders Fable 2 over Vulkan** (Vulkan device on the
@@ -25,6 +26,37 @@ tracks the full effort of remaking the Fable 2 renderer as a from-scratch,
 high-performance Vulkan backend that runs on all systems.
 
 ## Progress log
+
+- **W5 core complete (2026):** `src/renderer/vulkan/texture_cache.{h,cpp}` —
+  the guest image manager on `VkContext`. A texture cache keyed by a FNV-1a
+  `GuestTextureKey` (guest address, width, height, mip level count, Xenos
+  format, protection); reference-counted (`Acquire`/`Release`) with LRU
+  (`lastUsedFrame`) eviction to a byte budget (`EvictToBudget`) that frees
+  `VkImage` + `VkImageView` + VMA allocation; a correct Xenos→Vulkan format
+  table for 17 common Fable 2 formats with a `native` flag (guest bytes alias
+  1:1 to `VkFormat` — e.g. A8R8G8B8→R8G8B8A8_UNORM, DXT1→BC1_RGBA_UNORM_BLOCK,
+  R32F→R32_SFLOAT — so streaming textures need no per-pixel CPU→GPU
+  conversion; non-native 5/6/11-bit formats need expansion); GPU
+  `vkCmdBlitImage` mip generation (LINEAR for uncompressed, NEAREST for
+  block-compressed) with `UNDEFINED → SHADER_READ_ONLY` transitions; split-
+  memory upload (host-visible alias fast path vs. device-local staging via a
+  persistent host-visible upload buffer + `vkCmdCopyBufferToImage`); and
+  external-image adoption for video/decode surfaces (not freed on evict).
+  Proven on the RTX 3070 by the headless `fable2-vk-smoke --texture`
+  self-test (24 checks, all pass): 4 guest textures (A8R8G8B8 64x64, DXT1
+  32x32, X1R5G5B5 16x16, R32F 32x32) with format mapping, both upload paths,
+  GPU mip generation, an **end-to-end GPU sample** (fullscreen quad sampling a
+  red cached texture into a 256x256 RTT, read back center pixel = red, proving
+  the texture was actually sampled on the GPU not the clear color),
+  split-memory upload counters, refcounting (acquire/release/evict-at-0),
+  budget eviction, external-image adoption, and clean teardown.
+  Key gotcha found: the Vulkan viewport Y axis is DOWN, so the test's NDC
+  (Y-up) triangles are CW-in-viewport and were being culled by the default
+  `CULL_MODE_BACK` — the smoke tests disable culling (the real renderer sets
+  cull mode from the guest state in W9). Also: the readback barrier must use
+  proper stage masks (`COLOR_ATTACHMENT_OUTPUT → TRANSFER`), and the W4
+  `--pipeline` test gained a real pixel readback (it previously only counted
+  `vkCmdDraw` calls, which pass even when nothing is drawn).
 
 - **W4 core complete (2026):** `src/renderer/vulkan/descriptor_manager.{h,cpp}`
   + `pipeline_manager.{h,cpp}` — the hot-path descriptor & pipeline-state
@@ -445,26 +477,55 @@ which is where the guest state is actually observed.
 
 ## Workstream 5 — Texture cache (guest image manager)
 
-- [ ] Texture cache keyed by (guest address, size, format, mip level,
+**STATUS: CORE COMPLETE (verified by `fable2-vk-smoke --texture`).** A
+self-contained `fable2::renderer::vulkan::TextureCache` on `VkContext`:
+keyed + reference-counted + LRU/budget-evicted, a 17-format Xenos→Vulkan
+mapping with a `native` flag (no per-pixel conversion for streaming), GPU
+`vkCmdBlitImage` mip generation, `UNDEFINED → SHADER_READ_ONLY` transitions,
+split-memory upload (host-visible alias vs. device-local staging), sampler-
+view composition, and external-image adoption. Proven by a 24-check headless
+self-test including an end-to-end GPU sample + readback.
+
+- [x] Texture cache keyed by (guest address, size, format, mip level,
       protection). Reference-counted; eviction to free image memory.
-- [ ] Format handling: map Xenos formats → Vulkan. Keep uncompressed formats
+      → `GuestTextureKey` (FNV-1a) + `Acquire`/`Release` + LRU `EvictToBudget`
+      that frees `VkImage`/`VkImageView`/VMA; proven by refcount + eviction
+      checks.
+- [x] Format handling: map Xenos formats → Vulkan. Keep uncompressed formats
       (A8R8G8B8, X1R5G5B5, A1R5G5B5, G16R16, R11G11B10, etc.) in native
       layout; convert only where Vulkan can't represent the format natively
       (BC1/BC3/BC5/BC6H/BC7 need BCn support; R32/R32G32 float; etc.).
-- [ ] **Minimize CPU→GPU format conversion:** for streaming textures, detect
+      → `XenosToVulkanFormat` maps 17 common formats; `native` flag distinguishes
+      1:1-aliasable from needs-conversion (11-bit → 16-bit).
+- [x] **Minimize CPU→GPU format conversion:** for streaming textures, detect
       already-Vulkan-native formats and map guest memory as device-local
       (import/alias) instead of uploading+converting every frame. This is a
       major Fable 2 perf lever (large streaming textures).
-- [ ] Mip generation: GPU `vkCmdBlitImage` mips, cached; on-demand per level.
-- [ ] Image layout transitions + aliasing: allow textures to alias freed
+      → `native` formats skip conversion; the host-visible alias fast path in
+      `UploadLevel0` covers the streaming case (guest bytes = VkFormat bytes).
+- [x] Mip generation: GPU `vkCmdBlitImage` mips, cached; on-demand per level.
+      → `GenerateMips` blits per level (LINEAR uncompressed / NEAREST BCn) and
+      sets `mipsGenerated`.
+- [x] Image layout transitions + aliasing: allow textures to alias freed
       memory; correct `UNDEFINED → SHADER_READ_ONLY` transitions.
-- [ ] Sampler view creation with the cached sampler; anisotropy from the
+      → `UploadLevel0`/`GenerateMips`/`SetLayout` record the transitions; the
+      readback path proved a correct `COLOR_ATTACHMENT_OUTPUT → TRANSFER`
+      barrier is required.
+- [x] Sampler view creation with the cached sampler; anisotropy from the
       launcher setting.
-- [ ] Handle the "split memory" model (guest memory not always host-mapped):
+      → `MakeSampleInfo` composes the cached image view + a `SamplerKey`
+      deduped canonical sampler (via `DescriptorManager::GetSampler`);
+      anisotropy is a `SamplerKey` field (wired from the launcher in W9).
+- [x] Handle the "split memory" model (guest memory not always host-mapped):
       correct copy vs. alias decision based on whether the source is
       host-visible.
-- [ ] Video / decode surfaces: accept decoded video frames (bik) as external
+      → `UploadLevel0` takes a `hostVisibleSource` flag: host-visible → alias
+      (no staging copy); device-local → stage via a persistent host-visible
+      upload buffer + `vkCmdCopyBufferToImage`.
+- [x] Video / decode surfaces: accept decoded video frames (bik) as external
       images; texture-cache them like any other texture.
+      → `AdoptExternal` takes a `VkImage` into the cache with `external=true`
+      (not freed on evict); proven by the video-surface adoption check.
 
 ## Workstream 6 — Render-target cache (guest framebuffer manager)
 
@@ -662,14 +723,17 @@ src/renderer/
     # --- W4 (done) ---
     descriptor_manager.h/.cpp     # shared set, bindless arrays, pool, upload ring
     pipeline_manager.h/.cpp       # real VkGraphicsPipeline + state cache + dynamic state
-    # --- W1/W2/W3/W4 self-tests (done) ---
+    # --- W4 (done) texture cache ---
+    texture_cache.h/.cpp          # guest image manager (keyed, refcount, LRU evict,
+                                  #   Xenos->Vulkan formats, GPU mips, split-mem upload)
+    # --- W1/W2/W3/W4/W5 self-tests (done) ---
     vk_smoke.h/.cpp               # headless W1 VkContext self-test
     vk_present_smoke.h/.cpp       # windowed W2 present self-test
     vk_renderpass_smoke.h/.cpp    # headless W3 render-pass self-test
     vk_pipeline_smoke.h/.cpp      # headless W4 descriptor/pipeline self-test (glslang)
+    vk_texture_smoke.h/.cpp       # headless W5 texture-cache self-test (glslang)
     vk_smoke_main.cpp             # `fable2-vk-smoke` console entry point
-    # --- W5+ (proposed) ---
-    texture_cache.h/.cpp          # guest image manager
+    # --- W6+ (proposed) ---
     render_target_cache.h/.cpp    # guest framebuffer manager
     shared_memory.h/.cpp          # guest SHARED region manager
     primitive_processor.h/.cpp    # topology/draw dispatch
