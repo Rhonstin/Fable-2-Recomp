@@ -97,24 +97,52 @@ class Fable2App : public rex::ReXApp {
                                                &remote_pad_enabled_};
 #endif  // FABLE2_REMOTE_CONTROL
 
-  // Emulate the Xbox 360 Xenos GPU. Two plugins are staged next to the exe:
-  //   rexgpu-xenos[d].dll        -> D3D12 (prebuilt SDK plugin; the default)
-  //   rexgpu-xenos-vulkan[d].dll -> Vulkan (built from the SDK source via
+  // Emulate the Xbox 360 Xenos GPU. Plugins are staged next to the exe:
+  //   rexgpu-xenos[d].dll         -> D3D12 (prebuilt SDK plugin; the default)
+  //   rexgpu-xenos-vulkan[d].dll  -> Vulkan (built from the SDK source via
   //                                   tools/build_sdk_vulkan.cmd)
-  // Swap the renderer at launch with --gpu_plugin, no rebuild required:
+  //   rexgpu-fable2vulkan[d].dll  -> the custom high-performance Vulkan
+  //                                   renderer (tools/build_fable2_vulkan.cmd;
+  //                                   plans/custom-vulkan-renderer.md)
+  // Select the renderer at launch with --gpu_plugin (no rebuild needed):
   //   --gpu_plugin=xenos            D3D12 (default)
-  //   --gpu_plugin=xenos-vulkan     Vulkan
+  //   --gpu_plugin=xenos-vulkan     Stock Vulkan
+  //   --gpu_plugin=fable2-vulkan    Custom Vulkan renderer
+  // Or, without the flag, via [gpu] renderer = "stock" | "fable2" in
+  // fable2_config.toml (loaded earlier in OnPostInitLogging).
   void OnPreSetup(rex::RuntimeConfig& config) override {
-    std::string plugin = config.gpu_plugin.empty() ? "xenos" : config.gpu_plugin;
-    config.gpu_plugin = plugin;
+    // Resolve the requested renderer. An explicit --gpu_plugin wins; otherwise
+    // the [gpu] renderer setting picks it; otherwise the stock D3D12 plugin.
+    std::string plugin = config.gpu_plugin;
+    if (plugin.empty()) {
+      plugin = (fable2::config::Get().gpu_renderer == "fable2")
+                   ? "fable2-vulkan"
+                   : "xenos";
+    }
     if (plugin == "xenos-vulkan") {
       // Load the source-built plugin and force the Vulkan backend. It is
       // compiled with both D3D12 and Vulkan; the default "any" would pick
       // D3D12, so pass "vulkan" explicitly to get the VulkanGraphicsSystem.
       config.graphics = rex::system::LoadGpuPlugin("xenos-vulkan", "vulkan");
+    } else if (plugin == "fable2-vulkan") {
+      // Custom high-performance Vulkan renderer (plans/custom-vulkan-renderer.md).
+      // Loaded from rexgpu-fable2vulkan.dll; if it is not staged next to the
+      // exe the loader returns null and we fall back to the stock D3D12 plugin.
+      config.graphics = rex::system::LoadGpuPlugin("fable2vulkan", "vulkan");
+      if (!config.graphics) {
+        REXSYS_WARN(
+            "[fable2] fable2-vulkan renderer not staged next to the exe; "
+            "falling back to stock D3D12. Build it with tools/build_fable2_vulkan.cmd");
+      }
     }
-    // Otherwise leave config.graphics null so ReXApp loads
-    // LoadGpuPlugin("xenos") -> the prebuilt D3D12 plugin.
+    // config.gpu_plugin is ReXApp's fallback when config.graphics is null: point
+    // it at a plugin that will actually load (the stock one on fallback), or
+    // clear it when we already built the graphics system above.
+    if (!config.graphics) {
+      config.gpu_plugin = "xenos";
+    } else {
+      config.gpu_plugin.clear();
+    }
 
     // Build on top of the default input system (SDL gamepad + NOP) and add a
     // synthetic "keyboard gamepad" driver so host keys/mouse buttons can drive

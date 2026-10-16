@@ -180,6 +180,17 @@ hero_dog_texture_readback = false
 # Default: true
 dog_fur_depth_bias = true
 
+[gpu]
+# Which GPU plugin to load. "stock" = the prebuilt rexgpu-xenos D3D12 plugin
+# (original behaviour, the default); "fable2" = the custom high-performance
+# Vulkan renderer (rexgpu-fable2vulkan.dll; plans/custom-vulkan-renderer.md).
+# The fable2 renderer must be staged next to the exe (tools/build_fable2_vulkan
+# .cmd); if it is missing the game warns and falls back to the stock plugin.
+# The --gpu_plugin launch argument (stock/xenos, xenos-vulkan, fable2-vulkan)
+# overrides this when explicitly given.
+# Default: stock
+renderer = "stock"
+
 [perf]
 # NtYieldExecution batching for the hot-function overrides (see
 # src/core/hotfunc/hotfunc_yield.h): every Nth guest yield does the real

@@ -166,6 +166,14 @@ struct Values {
   // original (yield every call), 0 = never yield. Larger = fewer context
   // switches, less frequent CPU rotation to other guest threads.
   int32_t hotfunc_yield_every = 1;
+  // [gpu] renderer: which GPU plugin to load. "stock" = the prebuilt
+  // rexgpu-xenos D3D12 plugin (default, original behaviour); "fable2" = the
+  // custom high-performance Vulkan renderer (rexgpu-fable2vulkan.dll, see
+  // plans/custom-vulkan-renderer.md). Overridden by the --gpu_plugin launch
+  // argument when it is explicitly given. The fable2 plugin must be staged
+  // next to the exe (tools/build_fable2_vulkan.cmd); if it is missing the
+  // game falls back to the stock plugin and logs a warning.
+  std::string gpu_renderer{"stock"};
 };
 
 // Load the config from `path`.

@@ -59,3 +59,94 @@ add_compile_options($<$<CONFIG:RELEASE>:-g>)
 add_link_options(-Xlinker /DEBUG)
 
 add_subdirectory(${REXGLUE_SDK_SOURCE} "${CMAKE_BINARY_DIR}/sdk")
+
+# ============================================================================
+# rexgpu-fable2vulkan: the Fable 2 custom Vulkan renderer (this project).
+#
+# Lives in the game repo (src/renderer) but is built here, because it must
+# compile against the SDK SOURCE tree with REXGLUE_USE_VULKAN=ON: it reuses the
+# SDK's backend-agnostic guest-side graphics pipeline (recompiled here) and
+# links the SDK's glslang / VMA / Vulkan-header targets, which only exist in a
+# source build (the prebuilt 0.10.0 package is D3D12-only and ships no Vulkan
+# headers or glslang headers). See plans/custom-vulkan-renderer.md.
+#
+# It recompiles the SDK's graphics pipeline sources (guest + SPIR-V + Vulkan
+# backend) WITHOUT the SDK's own plugin_main.cpp (this project supplies its own
+# rex_gpu_create / rex_gpu_abi_version exports), so the plugin re-binds the
+# graphics system + command processor to the custom fable2::renderer classes.
+# ============================================================================
+if(REXGLUE_USE_VULKAN)
+    set(FABLE2_RENDERER_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../..")
+    set(GFX "${REXGLUE_SDK_SOURCE}/src/graphics")
+
+    set(FABLE2VULKAN_SOURCES
+        ${FABLE2_RENDERER_ROOT}/src/renderer/plugin_main.cpp
+        ${FABLE2_RENDERER_ROOT}/src/renderer/fable2_vulkan_graphics_system.cpp
+
+        # --- SDK guest-side pipeline (reused) ---
+        ${GFX}/flags.cpp
+        ${GFX}/register_file.cpp
+        ${GFX}/registers.cpp
+        ${GFX}/pipeline/shader/shader.cpp
+        ${GFX}/format/ucode.cpp
+        ${GFX}/sampler_info.cpp
+        ${GFX}/graphics_system.cpp
+        ${GFX}/command_processor.cpp
+        ${GFX}/frame_limiter.cpp
+        ${GFX}/util/draw_extent_estimator.cpp
+        ${GFX}/util/draw.cpp
+        ${GFX}/packet_disassembler.cpp
+        ${GFX}/primitive_processor.cpp
+        ${GFX}/pipeline/render_target/cache.cpp
+        ${GFX}/shared_memory.cpp
+        ${GFX}/pipeline/texture/cache.cpp
+        ${GFX}/pipeline/shader/interpreter.cpp
+        ${GFX}/pipeline/shader/translator.cpp
+        ${GFX}/pipeline/shader/translator_disasm.cpp
+
+        # --- Xenos register-bank -> SPIR-V translation (reused) ---
+        ${GFX}/pipeline/shader/spirv_builder.cpp
+        ${GFX}/pipeline/shader/spirv.cpp
+        ${GFX}/pipeline/shader/spirv_translator.cpp
+        ${GFX}/pipeline/shader/spirv_translator_alu.cpp
+        ${GFX}/pipeline/shader/spirv_translator_fetch.cpp
+        ${GFX}/pipeline/shader/spirv_translator_memexport.cpp
+        ${GFX}/pipeline/shader/spirv_translator_rb.cpp
+
+        # --- SDK Vulkan host backend (reused until custom classes replace it) ---
+        ${GFX}/vulkan/graphics_system.cpp
+        ${GFX}/vulkan/deferred_command_buffer.cpp
+        ${GFX}/vulkan/command_processor.cpp
+        ${GFX}/vulkan/pipeline_cache.cpp
+        ${GFX}/vulkan/primitive_processor.cpp
+        ${GFX}/vulkan/render_target_cache.cpp
+        ${GFX}/vulkan/shader.cpp
+        ${GFX}/vulkan/shared_memory.cpp
+        ${GFX}/vulkan/texture_cache.cpp
+    )
+
+    add_library(rexgpu-fable2vulkan SHARED ${FABLE2VULKAN_SOURCES})
+    set_target_properties(rexgpu-fable2vulkan PROPERTIES
+        EXPORT_NAME gpu-fable2vulkan
+        CXX_VISIBILITY_PRESET hidden
+        VISIBILITY_INLINES_HIDDEN ON)
+    target_include_directories(rexgpu-fable2vulkan PRIVATE
+        ${FABLE2_RENDERER_ROOT}/src/renderer
+        ${REXGLUE_SDK_SOURCE}
+        ${REXGLUE_SDK_SOURCE}/thirdparty/renderdoc)
+    target_compile_options(rexgpu-fable2vulkan PRIVATE -Wno-unused-variable)
+
+    # Everything PRIVATE: the plugin has no consumers. Never relink the
+    # OBJECT libraries; rexruntime already contains those objects.
+    target_link_libraries(rexgpu-fable2vulkan PRIVATE
+        rexruntime
+        xxHash::xxhash
+        Vulkan::Headers
+        glslang::SPIRV
+        GPUOpen::VulkanMemoryAllocator
+        glslang
+        MachineIndependent
+        GenericCodeGen
+        OSDependent
+        OGLCompiler)
+endif()

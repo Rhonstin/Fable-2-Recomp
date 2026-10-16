@@ -210,6 +210,17 @@ hero_dog_texture_readback = false
 # Default: true
 dog_fur_depth_bias = true
 
+[gpu]
+# Which GPU plugin to load. "stock" = the prebuilt rexgpu-xenos D3D12 plugin
+# (original behaviour, the default); "fable2" = the custom high-performance
+# Vulkan renderer (rexgpu-fable2vulkan.dll; plans/custom-vulkan-renderer.md).
+# The fable2 renderer must be staged next to the exe (tools/build_fable2_vulkan
+# .cmd); if it is missing the game warns and falls back to the stock plugin.
+# The --gpu_plugin launch argument (stock/xenos, xenos-vulkan, fable2-vulkan)
+# overrides this when explicitly given.
+# Default: stock
+renderer = "stock"
+
 [perf]
 # NtYieldExecution batching for the hot-function overrides (see
 # src/core/hotfunc/hotfunc_yield.h): every Nth guest yield does the real
@@ -276,8 +287,8 @@ bool Load(const std::filesystem::path& path) {
 
   // Warn about unknown top-level sections (usually a typo or a file written
   // for a newer build).
-  static constexpr std::array<std::string_view, 4> kKnownSections = {
-      "general", "input", "patches", "perf"};
+  static constexpr std::array<std::string_view, 5> kKnownSections = {
+      "general", "input", "patches", "perf", "gpu"};
   for (const auto& [key, value] : root) {
     const bool known =
         std::ranges::find(kKnownSections, key.str()) != kKnownSections.end();
@@ -385,6 +396,13 @@ bool Load(const std::filesystem::path& path) {
     values.hotfunc_yield_every = static_cast<int32_t>(Read<int64_t>(
         perf_table, "perf", "hotfunc_yield_every", "integer",
         values.hotfunc_yield_every));
+  }
+  const toml::path gpu_path{"gpu"};
+  const auto gpu = root[gpu_path];
+  if (gpu.is_table()) {
+    const toml::table& gpu_table = *gpu.as_table();
+    values.gpu_renderer = Read<std::string>(gpu_table, "gpu", "renderer",
+                                            "string", values.gpu_renderer);
   }
 
   g_values = values;
