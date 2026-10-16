@@ -79,9 +79,18 @@ if(REXGLUE_USE_VULKAN)
     set(FABLE2_RENDERER_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../..")
     set(GFX "${REXGLUE_SDK_SOURCE}/src/graphics")
 
+    # --- W1: the custom Vulkan foundation (vk_context, memory, pipeline cache, SPIRV-Tools, loader) ---
+    set(FABLE2_VKFOUNDATION_SOURCES
+        ${FABLE2_RENDERER_ROOT}/src/renderer/vulkan/vk_function_table.cpp
+        ${FABLE2_RENDERER_ROOT}/src/renderer/vulkan/memory_tracker.cpp
+        ${FABLE2_RENDERER_ROOT}/src/renderer/vulkan/pipeline_cache.cpp
+        ${FABLE2_RENDERER_ROOT}/src/renderer/vulkan/spirv_tools.cpp
+        ${FABLE2_RENDERER_ROOT}/src/renderer/vulkan/vk_context.cpp)
+
     set(FABLE2VULKAN_SOURCES
         ${FABLE2_RENDERER_ROOT}/src/renderer/plugin_main.cpp
         ${FABLE2_RENDERER_ROOT}/src/renderer/fable2_vulkan_graphics_system.cpp
+        ${FABLE2_VKFOUNDATION_SOURCES}
 
         # --- SDK guest-side pipeline (reused) ---
         ${GFX}/flags.cpp
@@ -144,9 +153,32 @@ if(REXGLUE_USE_VULKAN)
         Vulkan::Headers
         glslang::SPIRV
         GPUOpen::VulkanMemoryAllocator
+        spirv-tools-headers
         glslang
         MachineIndependent
         GenericCodeGen
         OSDependent
         OGLCompiler)
+
+    # ------------------------------------------------------------------
+    # fable2-vk-smoke: standalone console self-test for the VkContext
+    # foundation (W1). Exercises instance + device + VMA + a real GPU buffer
+    # round-trip + image alloc + on-disk pipeline-cache round-trip, and prints
+    # a PASS/FAIL report + memory/cache stats. Built so it can run headless
+    # (no window, no presentation) on any machine with a Vulkan loader.
+    # ------------------------------------------------------------------
+    add_executable(fable2-vk-smoke
+        ${FABLE2_VKFOUNDATION_SOURCES}
+        ${FABLE2_RENDERER_ROOT}/src/renderer/vulkan/vk_smoke.cpp
+        ${FABLE2_RENDERER_ROOT}/src/renderer/vulkan/vk_smoke_main.cpp)
+    target_include_directories(fable2-vk-smoke PRIVATE
+        ${FABLE2_RENDERER_ROOT}/src/renderer
+        ${REXGLUE_SDK_SOURCE}
+        ${REXGLUE_SDK_SOURCE}/thirdparty/renderdoc)
+    target_compile_options(fable2-vk-smoke PRIVATE -Wno-unused-variable)
+    target_link_libraries(fable2-vk-smoke PRIVATE
+        rexruntime
+        Vulkan::Headers
+        GPUOpen::VulkanMemoryAllocator
+        spirv-tools-headers)
 endif()

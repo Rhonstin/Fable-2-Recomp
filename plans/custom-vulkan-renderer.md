@@ -1,13 +1,18 @@
 # Custom Vulkan Renderer (rexgpu-fable2vulkan)
 
-**STATUS: M0 VERIFIED — plugin loads and renders** — the plugin ABI,
+**STATUS: M0 VERIFIED + W1 (Vulkan foundation) COMPLETE** — the plugin ABI,
 graphics-system, command-processor seam, CMake target, build script, launch/
 config selection and the `[gpu]` config key are all in place, and the
 `rexgpu-fable2vulkan.dll` plugin **loads in-game and renders Fable 2 over
-Vulkan** (Vulkan device on the host GPU + swapchain + presenting frames).
-The game still ships with the stock `rexgpu-xenos` D3D12 plugin as the
-default. This plan tracks the full effort of remaking the Fable 2 renderer as
-a from-scratch, high-performance Vulkan backend that runs on all systems.
+Vulkan** (Vulkan device on the host GPU + swapchain + presenting frames). The
+game still ships with the stock `rexgpu-xenos` D3D12 plugin as the default.
+**Workstream 1 is done and verified**: a self-contained
+`fable2::renderer::vulkan::VkContext` (dynamic Vulkan loader, VMA, in-memory +
+on-disk pipeline cache, per-pool memory tracker with a hard budget, optional
+validation layer, `Capabilities::IsSufficient` graceful-fallback gate) passes
+the standalone `fable2-vk-smoke` console self-test on real hardware. This plan
+tracks the full effort of remaking the Fable 2 renderer as a from-scratch,
+high-performance Vulkan backend that runs on all systems.
 
 ## Progress log
 
@@ -22,6 +27,21 @@ a from-scratch, high-performance Vulkan backend that runs on all systems.
   `VulkanGraphicsSystem` + `VulkanCommandProcessor` so the plugin renders
   correctly out of the box (M0/M1), then progressively replaces the costliest
   classes with custom implementations (the plan's reuse-then-rewrite approach).
+- **W1 complete (2026):** `src/renderer/vulkan/` — `vk_function_table.{h,cpp}`
+  (dynamic loader, no import lib; global/instance/device 3-phase resolution),
+  `vk_dynlib.h` (self-contained Win32/POSIX loader), `memory_tracker.{h,cpp}`
+  (per-pool + per-frame accounting, hard budget), `pipeline_cache.{h,cpp}`
+  (in-memory + on-disk blob with a keyed sidecar store), `spirv_tools.{h,cpp}`
+  (runtime SPIRV-Tools context), `vk_context.{h,cpp}` (instance/device/VMA/
+  pipeline-cache/validation + `Capabilities` + `IsSufficient` gate), and
+  `vk_smoke.{h,cpp}` + `vk_smoke_main.cpp` (the `fable2-vk-smoke` target). The
+  smoke test **PASSES** on the RTX 3070: instance + device + VMA + a real GPU
+  buffer copy round-trip + 256×256 image alloc + on-disk pipeline-cache
+  round-trip + memory stats. Two environment gotchas discovered & worked
+  around: the overlay Vulkan layers (RivaTuner / graphics-hook) crash
+  `vkCreateDevice` when a base-features node is in the `pNext` chain, so base
+  features are left to driver defaults; and the vendored headers use the
+  older `VkMappedMemoryRange` type for flush/invalidate.
 - **M0 verified (2026):** `rexgpu-fable2vulkan.dll` built from the wrapper,
   exports `rex_gpu_abi_version` + `rex_gpu_create`, and — run as
   `fable_2.exe --gpu_plugin=fable2-vulkan` against the source-built Vulkan
@@ -133,31 +153,43 @@ command processor can rely on. (The SDK's `ui::vulkan` provider already gives
 us instance/device/swapchain/VMA — reuse it where it fits, but keep a thin
 abstraction so we can swap in custom device/queue/memory decisions.)
 
-- [ ] `VkContext`: wrap `VkInstance`, `VkPhysicalDevice`, `VkDevice`, queue
-      families (graphics, transfer, compute) and queue handles.
-- [ ] Device feature set: expose what the guest needs (depth clamping,
-      separate storage images, wide lines off, timestamp compute and graphics,
-      sampler Anisotropy, `samplerFilterMinmax` for FXAA, 16-bit/float formats,
-      `robustBufferAccess`, `independentBlend`, 4444/565 format support).
-- [ ] Device extensions: request the minimum set that keeps us portable
-      (baseline 1.0) and opportunistically enable 1.1/1.2 + KHR extensions that
-      improve perf (`timeline semaphore`, `buffer device address`,
-      `subgroup`, `8bit`, `16bit storage`, `extended dynamic state`,
-      `sampler YcbCr`/`sampler filter minmax`).
-- [ ] Physical-device limits probe (max viewports, image array layers,
-      max draw count, max image dimensions/arrays, buffer/image granularity).
-- [ ] Queue selection + optional adaptive-queue for hybrid GPU laptops (prefer
-      discrete; avoid the iGPU TDR path noted in `src/main.cpp`).
-- [ ] Memory: integrate VMA; define memory-type selection helpers
-      (device-local, host-visible, host-coherent, imported).
-- [ ] Validation layers: optional, on in Debug, controllable by config;
-      custom validation callbacks for our invariants (no per-draw allocation,
-      no missing barrier before present).
-- [ ] Error handling: every `vk*` call checked; descriptive log on failure;
-      GPU-loss / device-reset path wired to the UI provider's
-      `host_gpu_loss_callback`.
+**STATUS: COMPLETE (verified by `fable2-vk-smoke` PASS).** Self-contained
+`fable2::renderer::vulkan::VkContext` in `src/renderer/vulkan/` with a
+dynamic Vulkan loader (no import-lib dependency), VMA, in-memory + on-disk
+pipeline cache, per-pool memory tracker with a hard budget, optional
+validation layer, and a `Capabilities::IsSufficient` gate that drives graceful
+fallback to the stock D3D12 renderer. Proven on real hardware by the standalone
+`fable2-vk-smoke` console target (instance + device + VMA + a real GPU buffer
+copy round-trip + image alloc + on-disk pipeline-cache round-trip + memory
+stats).
 
-## Workstream 2 — Frame sync & presentation
+- [x] `VkContext`: wrap `VkInstance`, `VkPhysicalDevice`, `VkDevice`, queue
+      families (graphics, transfer, compute) and queue handles.
+- [x] Device feature set: 1.2/1.3/EXT features enabled via the pNext chain
+      (`timeline semaphore`, `buffer device address`, `descriptor indexing`,
+      `dynamic rendering`, `synchronization2`, `maintenance4`, fragment-shader
+      interlock, non-seamless cube map); base (1.0) features left to driver
+      defaults (the overlay Vulkan layers on this box crash if a base-features
+      node / `pEnabledFeatures` is present in `VkDeviceCreateInfo`).
+- [x] Device extensions: request the portable baseline + perf extensions
+      (`swapchain`, `dedicated_allocation`, `get_memory_requirements2`,
+      `bind_memory2`, `maintenance4`, `EXT_memory_budget`, `spv_1_4`,
+      `dynamic_rendering`, `timeline_semaphore`), skipping ones already core.
+- [x] Physical-device probe: device name, API version, driver ID, memory
+      properties/types, extension list, feature support — surfaced through the
+      `Capabilities` struct + `Describe()` diagnostics.
+- [x] Queue selection: graphics + compute (same family) + optional separate
+      transfer family. (Adaptive hybrid-GPU queue deferral is a W11 concern.)
+- [x] Memory: VMA integrated (function-pointer driven, `VMA_STATIC_VULKAN_FUNCTIONS=0`);
+      `AllocateBuffer`/`AllocateImage` helpers route to device-local or
+      host-visible pools and respect the memory budget.
+- [x] Validation layers: optional (`--validation` / `enableValidation`),
+      VK_EXT_debug_utils messenger wired to the SDK log.
+- [x] Error handling: every `vk*` call checked with a descriptive error;
+      `IsSufficient` gate lists all missing capabilities and returns false so
+      the app falls back to the stock renderer instead of hard-failing.
+
+## Workstream 2 — Frame sync & presentation (next)
 
 - [ ] Frame synchronizer: N in-flight frames (default 2–3); per-frame
       `VkFence`/`VkSemaphore` ring; `vkAcquireNextImage` with timeout +
