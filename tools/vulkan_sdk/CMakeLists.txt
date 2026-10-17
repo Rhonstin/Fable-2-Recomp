@@ -186,6 +186,8 @@ if(REXGLUE_USE_VULKAN)
         ${FABLE2_RENDERER_ROOT}/src/renderer/vulkan/vk_shared_blit_smoke.cpp
         ${FABLE2_RENDERER_ROOT}/src/renderer/vulkan/vk_draw_smoke.cpp
         ${FABLE2_RENDERER_ROOT}/src/renderer/vulkan/vk_shader_smoke.cpp
+        ${FABLE2_RENDERER_ROOT}/src/renderer/vulkan/vk_perf_smoke.cpp
+        ${FABLE2_RENDERER_ROOT}/src/renderer/vulkan/vk_robustness_smoke.cpp
         ${FABLE2_RENDERER_ROOT}/src/renderer/vulkan/vk_smoke_main.cpp)
     target_include_directories(fable2-vk-smoke PRIVATE
         ${FABLE2_RENDERER_ROOT}/src/renderer

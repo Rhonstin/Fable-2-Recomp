@@ -15,6 +15,8 @@
 #include "vk_renderpass_smoke.h"
 #include "vk_draw_smoke.h"
 #include "vk_shader_smoke.h"
+#include "vk_perf_smoke.h"
+#include "vk_robustness_smoke.h"
 #include "vk_rt_smoke.h"
 #include "vk_shared_blit_smoke.h"
 #include "vk_smoke.h"
@@ -33,6 +35,8 @@ int main(int argc, char** argv) {
   bool shared = false;
   bool draw = false;
   bool shader = false;
+  bool perf = false;
+  bool robustness = false;
   for (int i = 1; i < argc; ++i) {
     const std::string a = argv[i];
     if (a == "--validation") {
@@ -59,6 +63,10 @@ int main(int argc, char** argv) {
       draw = true;
     } else if (a == "--shader") {
       shader = true;
+    } else if (a == "--perf") {
+      perf = true;
+    } else if (a == "--robustness") {
+      robustness = true;
     } else if (a == "--present") {
       present = true;
     } else if (a == "--present-seconds" && i + 1 < argc) {
@@ -103,6 +111,12 @@ int main(int argc, char** argv) {
   }
   if (shader) {
     return fable2::renderer::vulkan::RunShaderSmokeTest(cfg, report);
+  }
+  if (perf) {
+    return fable2::renderer::vulkan::RunPerfSmokeTest(cfg, report);
+  }
+  if (robustness) {
+    return fable2::renderer::vulkan::RunRobustnessSmokeTest() ? 0 : 1;
   }
   if (renderpass) {
     return fable2::renderer::vulkan::RunRenderPassSmokeTest(cfg, report);

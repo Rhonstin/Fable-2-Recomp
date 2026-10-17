@@ -529,50 +529,50 @@ self-test including an end-to-end GPU sample + readback.
 
 ## Workstream 6 — Render-target cache (guest framebuffer manager)
 
-- [ ] RT cache keyed by (guest address, extent, format, msaa, color/depth
+- [x] RT cache keyed by (guest address, extent, format, msaa, color/depth
       usage). Reference-counted with LRU-ish eviction.
-- [ ] MSAA: 1x/2x/4x multisampled color + depth, resolve to the single-sample
+- [x] MSAA: 1x/2x/4x multisampled color + depth, resolve to the single-sample
       guest target (the game's native MSAA path).
-- [ ] Depth formats: map to Vulkan depth formats (X24S8, G16R16, R32 uint
+- [x] Depth formats: map to Vulkan depth formats (X24S8, G16R16, R32 uint
       depth, float depth); support `depthCompareOp`/`stencilOp` from blend
       state.
-- [ ] Preserve guest RT contents across frame (do not clear unless the guest
+- [x] Preserve guest RT contents across frame (do not clear unless the guest
       clears); correct `ATTACHMENT_OPTIMAL` layout on first touch.
-- [ ] Framebuffer objects keyed by (RT set, render pass); reuse rather than
+- [x] Framebuffer objects keyed by (RT set, render pass); reuse rather than
       recreate.
-- [ ] Render-to-texture + blit/resolve to guest memory (the scratch texture at
+- [x] Render-to-texture + blit/resolve to guest memory (the scratch texture at
       `0x12704000` used by the hero/dog morph path).
-- [ ] Readback (CPU) of guest memory when the CPU locks a texture; coalesce
+- [x] Readback (CPU) of guest memory when the CPU locks a texture; coalesce
       and async via a dedicated readback queue/staging buffer.
 
 ## Workstream 7 — Shared memory & blits/copy
 
-- [ ] Guest shared memory (Xenos `SHARED` region) manager: map guest shared
+- [x] Guest shared memory (Xenos `SHARED` region) manager: map guest shared
       memory to a coherent `VkBuffer`; handle `COPY_TO_SHMEM`, `COPY_FROM_SHMEM`,
       `SHARED_FILL`, `SHARED_SWAP` packets.
-- [ ] Immediate copy/blit commands: 2D blit, scale, fill (rect/clear), and
+- [x] Immediate copy/blit commands: 2D blit, scale, fill (rect/clear), and
       16bpp/32bpp resolve blits the guest issues directly.
-- [ ] Fill/clear: `vkCmdClearColorImage` / `vkCmdClearDepthStencilImage` /
+- [x] Fill/clear: `vkCmdClearColorImage` / `vkCmdClearDepthStencilImage` /
       `vkCmdClearAttachments` where possible, `vkCmdFillBuffer` for buffer
       fills.
-- [ ] Correct barrier between shared-memory copy and subsequent texture use.
+- [x] Correct barrier between shared-memory copy and subsequent texture use.
 
 ## Workstream 8 — Primitives, vertex/index buffers & draw dispatch
 
-- [ ] Vertex/index buffers: guest memory → `VkBuffer` (import/alias if
+- [x] Vertex/index buffers: guest memory → `VkBuffer` (import/alias if
       host-visible, else upload via a per-frame upload ring). Handle 16-bit
       index wrap and 32-bit indices.
-- [ ] Primitive topology mapping (point/line/triangle, with/without adjacency,
+- [x] Primitive topology mapping (point/line/triangle, with/without adjacency,
       strips, lists); clamp/point/line rasterizer modes.
-- [ ] Draw calls: `vkCmdDraw` / `vkCmdDrawIndexed`; indirect for
+- [x] Draw calls: `vkCmdDraw` / `vkCmdDrawIndexed`; indirect for
       GPU-instanced / geometry-shader-emitted draws.
-- [ ] Geometry/patch shader emulation: Xenos has no GS/DS — the SDK
+- [x] Geometry/patch shader emulation: Xenos has no GS/DS — the SDK
       pre-translates the fixed-function topology expanders (quad/triangle
       tessellation, adaptive tessellation) into SPIR-V. Wire those translated
       shaders (HS/VS equivalents) into the pipeline; ensure the
       adaptive-tessellation path is present (see `src/graphics/shaders/`).
-- [ ] Tessellation factors and culling from the guest rasterizer state.
-- [ ] Viewport/scissor (5 viewports on Xenos; support multi-viewport draws).
+- [x] Tessellation factors and culling from the guest rasterizer state.
+- [x] Viewport/scissor (5 viewports on Xenos; support multi-viewport draws).
 
 ## Workstream 9 — Shader translation & pipeline assembly
 
@@ -580,20 +580,20 @@ Reuse the SDK's register-bank → SPIR-V translator (it already emits valid
 SPIR-V including fetch/memory-export/register-bank stages). We consume its
 output; we own pipeline assembly.
 
-- [ ] Compile translated SPIR-V into `VkShaderModule` (caching by hash);
+- [x] Compile translated SPIR-V into `VkShaderModule` (caching by hash);
       validate with SPIRV-Tools in Debug.
-- [ ] Assemble `VkPipeline` per stage (VS, HS, DS, GS, FS) from the
+- [x] Assemble `VkPipeline` per stage (VS, HS, DS, GS, FS) from the
       translator's output + the guest blend/raster/viewport state.
-- [ ] Specialization / dynamic uniform buffers for per-draw constant blocks.
+- [x] Specialization / dynamic uniform buffers for per-draw constant blocks.
 - [ ] Handle the shader "interpreter" fallback path (some guests ship
       uncompiled bytecode interpreted on the host) — decide whether to
       keep it or require translation; log when hit.
-- [ ] Pipeline layout compatibility: share descriptor set layouts across
+- [x] Pipeline layout compatibility: share descriptor set layouts across
       pipelines to keep state-change cost low (see WS4).
 
 ## Workstream 10 — Performance program (Fable 2 specific)
 
-- [ ] Baseline: build a profiler hook that reports (a) guest ms/frame,
+- [x] Baseline: build a profiler hook that reports (a) guest ms/frame,
       (b) CPU command-encoding time per frame, (c) draw/descriptor/pipeline
       call counts, (d) texture/RT cache hit rate, (e) format-conversion bytes.
 - [ ] Target: reach/beat the stock D3D12 plugin's framerate at the same
@@ -607,25 +607,25 @@ output; we own pipeline assembly.
 - [ ] Avoid MSAA resolve cost where the guest uses 1x (detect and skip).
 - [ ] Post-FX passes (FXAA, gamma) — implement as lightweight fullscreen
       compute/PS; reuse the SDK's compiled post-FX shaders where they fit.
-- [ ] Framerate/fps-cap interplay: verify the vsync worker + our present
+- [x] Framerate/fps-cap interplay: verify the vsync worker + our present
       path respect the 30/60/120/144/165/240/unlimited FPS options.
 
 ## Workstream 11 — Cross-system robustness
 
 - [ ] Build on Windows (clang + lld + Ninja, matching the stock plugin build)
       and on Linux (GCC/Clang). The plugin is pure C++ + Vulkan; no D3D.
-- [ ] Dynamic Vulkan loader (load `vulkan-1.dll` / `libvulkan.so.1`); no
+- [x] Dynamic Vulkan loader (load `vulkan-1.dll` / `libvulkan.so.1`); no
       import library required (matches `src/vulkan_smoke.cpp`).
-- [ ] Feature-detect and degrade: minimum-viable on a Vulkan 1.0 core device
+- [x] Feature-detect and degrade: minimum-viable on a Vulkan 1.0 core device
       (older iGPU / integrated); enhanced path on 1.1/1.2. Log the active
       tier at startup.
-- [ ] Adapter enumeration + selection: pick best device for the requested
+- [x] Adapter enumeration + selection: pick best device for the requested
       work; prefer discrete on hybrid laptops; allow override by config.
 - [ ] macOS via MoltenVK (the SDK's `vulkan_moltenvk` path) — smoke-test only,
       not a primary target.
-- [ ] Graceful failure: if no suitable device, log + fall back to the stock
+- [x] Graceful failure: if no suitable device, log + fall back to the stock
       plugin (do not hard-crash the game).
-- [ ] Thread-safety of the plugin's global state; clean shutdown
+- [x] Thread-safety of the plugin's global state; clean shutdown
       (`Shutdown()` tears down device before the loader handle closes).
 
 ## Workstream 12 — Correctness & validation vs. reference

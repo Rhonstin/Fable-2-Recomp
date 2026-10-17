@@ -99,10 +99,19 @@ class BlitManager {
   // Copy a buffer region (vkCmdCopyBuffer).
   void CopyBuffer(VkBuffer src, VkBuffer dst, uint64_t srcOffset, uint64_t dstOffset,
                   uint64_t size, VkCommandBuffer cmd);
+  // Clear a depth/stencil image (vkCmdClearDepthStencilImage).
+  void ClearDepthStencil(VkImage image, float depth, uint32_t stencil,
+                         VkCommandBuffer cmd);
+  // Clear render pass attachments (vkCmdClearAttachments) — use inside a render pass.
+  void ClearAttachments(uint32_t attachmentIndex, float r, float g, float b, float a,
+                        float depth, uint32_t stencil, uint32_t rectX, uint32_t rectY,
+                        uint32_t rectW, uint32_t rectH, VkCommandBuffer cmd);
 
   uint64_t blits = 0;
   uint64_t scales = 0;
   uint64_t imageFills = 0;
+  uint64_t depthClears = 0;
+  uint64_t attachmentClears = 0;
   uint64_t bufferFills = 0;
   uint64_t bufferCopies = 0;
 

@@ -113,4 +113,46 @@ void DrawDispatcher::DrawIndexed(VkCommandBuffer cmd, const DrawParams& params,
   drawIndexedCalls++;
 }
 
+void DrawDispatcher::DrawIndirect(VkCommandBuffer cmd, VkBuffer buffer, uint64_t offset,
+                                  uint32_t drawCount, uint32_t stride) {
+  if (!ctx_) {
+    return;
+  }
+  Functions& f = ctx_->functions();
+  f.vkCmdDrawIndirect(cmd, buffer, offset, drawCount, stride);
+  drawIndirectCalls++;
+}
+
+void DrawDispatcher::DrawIndexedIndirect(VkCommandBuffer cmd, VkBuffer buffer, uint64_t offset,
+                                         uint32_t drawCount, uint32_t stride) {
+  if (!ctx_) {
+    return;
+  }
+  Functions& f = ctx_->functions();
+  f.vkCmdDrawIndexedIndirect(cmd, buffer, offset, drawCount, stride);
+  drawIndexedIndirectCalls++;
+}
+
+void DrawDispatcher::SetMultiViewportScissor(VkCommandBuffer cmd, const ViewportState* viewports,
+                                             const ScissorState* scissors, uint32_t count,
+                                             bool scissorEnabled) {
+  if (!ctx_ || count == 0 || count > 5) {
+    return;
+  }
+  Functions& f = ctx_->functions();
+  VkViewport vps[5];
+  for (uint32_t i = 0; i < count; ++i) {
+    vps[i] = MakeViewport(viewports[i]);
+  }
+  f.vkCmdSetViewport(cmd, 0, count, vps);
+  if (scissorEnabled && scissors) {
+    VkRect2D scs[5];
+    for (uint32_t i = 0; i < count; ++i) {
+      scs[i] = MakeScissor(scissors[i]);
+    }
+    f.vkCmdSetScissor(cmd, 0, count, scs);
+  }
+  multiViewportSets++;
+}
+
 }  // namespace fable2::renderer::vulkan

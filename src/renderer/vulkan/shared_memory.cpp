@@ -245,4 +245,44 @@ void BlitManager::CopyBuffer(VkBuffer src, VkBuffer dst, uint64_t srcOffset, uin
   bufferCopies++;
 }
 
+void BlitManager::ClearDepthStencil(VkImage image, float depth, uint32_t stencil,
+                                    VkCommandBuffer cmd) {
+  if (!ctx_) {
+    return;
+  }
+  Functions& f = ctx_->functions();
+  VkImageSubresourceRange sub = {VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT, 0, 1, 0, 1};
+  VkClearDepthStencilValue dsv{};
+  dsv.depth = depth;
+  dsv.stencil = stencil;
+  f.vkCmdClearDepthStencilImage(cmd, image, VK_IMAGE_LAYOUT_GENERAL,
+                                &dsv, 1, &sub);
+  depthClears++;
+}
+
+void BlitManager::ClearAttachments(uint32_t attachmentIndex, float r, float g, float b, float a,
+                                   float depth, uint32_t stencil, uint32_t rectX, uint32_t rectY,
+                                   uint32_t rectW, uint32_t rectH, VkCommandBuffer cmd) {
+  if (!ctx_) {
+    return;
+  }
+  Functions& f = ctx_->functions();
+  VkClearAttachment att{};
+  att.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+  att.colorAttachment = attachmentIndex;
+  att.clearValue.color.float32[0] = r;
+  att.clearValue.color.float32[1] = g;
+  att.clearValue.color.float32[2] = b;
+  att.clearValue.color.float32[3] = a;
+  att.clearValue.depthStencil.depth = depth;
+  att.clearValue.depthStencil.stencil = stencil;
+  VkClearRect rect{};
+  rect.rect.offset = {static_cast<int32_t>(rectX), static_cast<int32_t>(rectY)};
+  rect.rect.extent = {rectW, rectH};
+  rect.baseArrayLayer = 0;
+  rect.layerCount = 1;
+  f.vkCmdClearAttachments(cmd, 1, &att, 1, &rect);
+  attachmentClears++;
+}
+
 }  // namespace fable2::renderer::vulkan

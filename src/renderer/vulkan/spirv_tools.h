@@ -31,10 +31,32 @@ class SpirvToolsContext {
   spv_context context() const { return context_; }
   bool IsValid() const { return context_ != nullptr; }
 
+  // Validate a raw SPIR-V binary. Returns true if valid.
+  // `err` receives a diagnostic message on failure.
+  bool Validate(const uint32_t* words, size_t wordCount, std::string& err) {
+    if (!IsValid() || !fn_spvValidateBinary_) {
+      return true;  // Validation unavailable — non-fatal.
+    }
+    spv_diagnostic diagnostic = nullptr;
+    spv_result_t result = fn_spvValidateBinary_(context_, words, wordCount, &diagnostic);
+    if (result != SPV_SUCCESS) {
+      if (diagnostic) {
+        err = diagnostic->error ? diagnostic->error : "unknown error";
+        fn_spvDiagnosticDestroy_(diagnostic);
+      } else {
+        err = "SPIR-V validation failed (no diagnostic)";
+      }
+      return false;
+    }
+    return true;
+  }
+
  private:
   DynLib library_;
   spv_context (*fn_spvContextCreate_)(spv_target_env) = nullptr;
   void (*fn_spvContextDestroy_)(spv_context) = nullptr;
+  spv_result_t (*fn_spvValidateBinary_)(spv_const_context, const uint32_t*, size_t, spv_diagnostic*) = nullptr;
+  void (*fn_spvDiagnosticDestroy_)(spv_diagnostic) = nullptr;
   spv_context context_ = nullptr;
 };
 

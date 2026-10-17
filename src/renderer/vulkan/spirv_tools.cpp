@@ -34,6 +34,11 @@ bool SpirvToolsContext::Initialize(spv_target_env env, std::string& err) {
     Shutdown();
     return false;
   }
+  // Best-effort: resolve validation functions (non-fatal if absent).
+  fn_spvValidateBinary_ =
+      library_.GetSymbolAs<decltype(fn_spvValidateBinary_)>("spvValidateBinary");
+  fn_spvDiagnosticDestroy_ =
+      library_.GetSymbolAs<decltype(fn_spvDiagnosticDestroy_)>("spvDiagnosticDestroy");
 
   context_ = fn_spvContextCreate_(env);
   if (!context_) {

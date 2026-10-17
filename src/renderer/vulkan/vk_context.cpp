@@ -27,23 +27,48 @@ bool StringHas(const std::vector<std::string>& v, const char* name) {
 // ---------------------------------------------------------------------------
 // Capabilities
 // ---------------------------------------------------------------------------
+FeatureTier Capabilities::Tier() const {
+  // Minimum requirement: Vulkan 1.0 + graphics queue family.
+  if (deviceApiVersion < VK_MAKE_API_VERSION(0, 1, 0, 0)) return FeatureTier::kUnsupported;
+  if (graphicsFamily < 0) return FeatureTier::kUnsupported;
+  if (presentationSupported) {
+    if (!StringHas(deviceExtensions, "VK_KHR_swapchain")) return FeatureTier::kUnsupported;
+  }
+  // Tier 2: Vulkan 1.2 + dynamic rendering + maintenance4.
+  if (deviceApiVersion >= VK_MAKE_API_VERSION(0, 1, 2, 0) && dynamicRendering && maintenance4) {
+    return FeatureTier::kTier2_Vulkan12;
+  }
+  // Tier 1: Vulkan 1.1 + timeline semaphore.
+  if (deviceApiVersion >= VK_MAKE_API_VERSION(0, 1, 1, 0) && timelineSemaphore) {
+    return FeatureTier::kTier1_Vulkan11;
+  }
+  // Tier 0: Vulkan 1.0 core (render passes + binary fences).
+  return FeatureTier::kTier0_Vulkan10;
+}
+
+const char* Capabilities::TierName() const {
+  switch (Tier()) {
+    case FeatureTier::kTier2_Vulkan12: return "Tier 2 (Vulkan 1.2: dynamic rendering + maintenance4)";
+    case FeatureTier::kTier1_Vulkan11: return "Tier 1 (Vulkan 1.1: timeline semaphores)";
+    case FeatureTier::kTier0_Vulkan10: return "Tier 0 (Vulkan 1.0: render passes + binary fences)";
+    default: return "Unsupported";
+  }
+}
+
 bool Capabilities::IsSufficient(std::vector<std::string>* missing) const {
   if (missing) missing->clear();
-  const auto need = [&](bool ok, const char* what) {
-    if (!ok && missing) missing->emplace_back(what);
-    return ok;
-  };
-  bool ok = true;
-  ok &= need(deviceApiVersion >= VK_MAKE_API_VERSION(0, 1, 2, 0),
-             "Vulkan 1.2 device");
-  ok &= need(graphicsFamily >= 0, "graphics queue family");
-  if (presentationSupported) {
-    ok &= need(StringHas(deviceExtensions, "VK_KHR_swapchain"), "VK_KHR_swapchain");
+  const FeatureTier tier = Tier();
+  if (tier == FeatureTier::kUnsupported) {
+    if (deviceApiVersion < VK_MAKE_API_VERSION(0, 1, 0, 0)) {
+      missing->emplace_back("Vulkan 1.0 device");
+    }
+    if (graphicsFamily < 0) missing->emplace_back("graphics queue family");
+    if (presentationSupported && !StringHas(deviceExtensions, "VK_KHR_swapchain")) {
+      missing->emplace_back("VK_KHR_swapchain");
+    }
+    return false;
   }
-  ok &= need(dynamicRendering, "VK_KHR_dynamic_rendering");
-  ok &= need(timelineSemaphore, "VK_KHR_timeline_semaphore");
-  ok &= need(maintenance4, "VK_KHR_maintenance4");
-  return ok;
+  return true;
 }
 
 VkSampleCountFlagBits Capabilities::ClampMsaa(VkSampleCountFlagBits requested) const {
@@ -141,23 +166,21 @@ bool VkContext::Create(const VkContextConfig& config, std::unique_ptr<VkContext>
     ctx->LoadPipelineCache(pErr);
   }
 
-  // Capability summary.
+  // Capability summary + feature tier (W11).
   {
     std::vector<std::string> missing;
     const bool sufficient = ctx->caps_.IsSufficient(&missing);
+    const FeatureTier tier = ctx->caps_.Tier();
     REXGPU_INFO(
-        "fable2-renderer: Vulkan {} device '{}' (api {}.{}.{}, driver 0x{:x}, vendor 0x{:04x}) "
-        "queues g{} c{} t{} | dynamic-rendering {} timeline {} sync2 {} spirv14 {} "
-        "robustness2 {} mem-budget {} | presentation {}",
-        ctx->caps_.core13 ? "1.3" : (ctx->caps_.core12 ? "1.2" : "1.0/1.1"),
+        "fable2-renderer: Vulkan device '{}' (api {}.{}.{}, driver 0x{:x}, vendor 0x{:04x}) "
+        "queues g{} c{} t{} | {} | presentation {}",
         ctx->caps_.deviceName,
         VK_VERSION_MAJOR(ctx->caps_.deviceApiVersion),
         VK_VERSION_MINOR(ctx->caps_.deviceApiVersion),
         VK_VERSION_PATCH(ctx->caps_.deviceApiVersion), ctx->caps_.driverVersion,
         ctx->caps_.vendorId, ctx->caps_.graphicsQueueCount, ctx->caps_.computeQueueCount,
-        ctx->caps_.transferFamily >= 0 ? 1 : 0, ctx->caps_.dynamicRendering,
-        ctx->caps_.timelineSemaphore, ctx->caps_.sync2, ctx->caps_.spirv14,
-        ctx->caps_.robustness2, ctx->caps_.memoryBudget, ctx->caps_.presentationSupported);
+        ctx->caps_.transferFamily >= 0 ? 1 : 0, ctx->caps_.TierName(),
+        ctx->caps_.presentationSupported);
     if (!sufficient) {
       std::string m;
       for (size_t i = 0; i < missing.size(); ++i) {
@@ -166,6 +189,7 @@ bool VkContext::Create(const VkContextConfig& config, std::unique_ptr<VkContext>
       REXGPU_ERROR("fable2-renderer: device lacks required capabilities: {} — falling back", m);
       return false;
     }
+    (void)tier;
   }
 
   out = std::move(ctx);
@@ -729,6 +753,7 @@ bool VkContext::AllocateBuffer(VkBuffer* outBuffer, VmaAllocation* outAlloc, VkD
                                VmaMemoryUsage usage, VkBufferUsageFlags usageFlags,
                                VkMemoryPropertyFlags memProps, void** hostPtr,
                                std::string& err) {
+  std::lock_guard<std::mutex> lock(stateMutex_);
   const bool hostVisible = (usage == VMA_MEMORY_USAGE_CPU_ONLY ||
                             (memProps & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) != 0);
   auto& pool = hostVisible ? memory_.HostVisiblePool() : memory_.DeviceLocalPool();

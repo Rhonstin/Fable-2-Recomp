@@ -170,6 +170,7 @@ bool Functions::LoadDevice(VkDevice device, std::string& err) {
   FABLE2_DEV(vkCmdResolveImage);
   FABLE2_DEV(vkCmdClearColorImage);
   FABLE2_DEV(vkCmdClearDepthStencilImage);
+  FABLE2_DEV(vkCmdClearAttachments);
   FABLE2_DEV(vkCmdFillBuffer);
   // W4: pipeline state, descriptor sets, samplers, dynamic state, draw.
   FABLE2_DEV(vkCreateShaderModule);
@@ -194,6 +195,8 @@ bool Functions::LoadDevice(VkDevice device, std::string& err) {
   FABLE2_DEV(vkCmdBindIndexBuffer);
   FABLE2_DEV(vkCmdDraw);
   FABLE2_DEV(vkCmdDrawIndexed);
+  FABLE2_DEV(vkCmdDrawIndirect);
+  FABLE2_DEV(vkCmdDrawIndexedIndirect);
   FABLE2_DEV(vkCmdSetViewport);
   FABLE2_DEV(vkCmdSetScissor);
   FABLE2_DEV(vkCmdSetBlendConstants);

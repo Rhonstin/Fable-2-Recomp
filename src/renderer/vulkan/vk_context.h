@@ -12,6 +12,7 @@
 // is created by Fable2VulkanGraphicsSystem (and the standalone smoke test).
 //
 #include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -24,6 +25,17 @@
 #include "vk_function_table.h"
 
 namespace fable2::renderer::vulkan {
+
+// W11 — Feature-detection tier. The renderer degrades gracefully:
+//   Tier 0 (Vulkan 1.0): render passes + binary fences + no maintenance4
+//   Tier 1 (Vulkan 1.1): + timeline semaphores + buffer device address
+//   Tier 2 (Vulkan 1.2): + dynamic rendering + sync2 + maintenance4
+enum class FeatureTier : int {
+  kUnsupported = -1,  // no suitable device
+  kTier0_Vulkan10 = 0,
+  kTier1_Vulkan11 = 1,
+  kTier2_Vulkan12 = 2,
+};
 
 // A snapshot of the instance + physical-device capabilities, queried once at
 // VkContext::Create. The renderer reads this to select features (dynamic
@@ -101,8 +113,17 @@ struct Capabilities {
   // Device extensions that ended up enabled.
   std::vector<std::string> deviceExtensions;
 
-  // True if every capability the renderer requires is present.
+  // W11: Feature-detection tier. Determines which code paths the renderer uses.
+  //   Tier 0: Vulkan 1.0 — render passes, binary fences
+  //   Tier 1: Vulkan 1.1 — + timeline semaphores
+  //   Tier 2: Vulkan 1.2 — + dynamic rendering, maintenance4
+  FeatureTier Tier() const;
+
+  // True if every capability the renderer requires is present (Tier >= 0).
   bool IsSufficient(std::vector<std::string>* missing) const;
+
+  // Human-readable tier description for startup logging.
+  const char* TierName() const;
 };
 
 struct VkContextConfig {
@@ -116,7 +137,7 @@ struct VkContextConfig {
   uint64_t memoryBudgetBytes = 0;  // 0 = no hard budget (report only)
   spv_target_env spirvEnv = SPV_ENV_VULKAN_1_1_SPIRV_1_4;
   const char* applicationName = "fable2-renderer";
-  uint32_t apiVersion = VK_MAKE_API_VERSION(0, 1, 3, 0);
+  uint32_t apiVersion = VK_MAKE_API_VERSION(0, 1, 0, 0);  // W11: minimum Vulkan 1.0
   const char* loaderName = "";  // optional custom Vulkan loader path
 };
 
@@ -177,6 +198,11 @@ class VkContext {
   // Wait for all in-flight work (used by the smoke test + shutdown).
   void WaitIdle();
 
+  // W11: Thread-safety. The plugin's global state may be accessed from the
+  // guest thread (draw commands) and the vsync worker thread (presentation).
+  // This mutex protects VMA allocation + pipeline cache operations.
+  std::mutex& StateMutex() { return stateMutex_; }
+
  private:
   VkContext() = default;
   bool CreateInstance(std::string& err);
@@ -206,6 +232,9 @@ class VkContext {
   uint32_t gfxFamily_ = 0, computeFamily_ = 0, transferFamily_ = 0;
   VmaAllocatorCreateFlags allocatorFlags_ = 0;
   VkPhysicalDeviceMemoryProperties memoryProperties_{};  // for host-visibility checks
+
+  // W11: Thread-safety mutex for VMA + pipeline cache operations.
+  std::mutex stateMutex_;
 };
 
 }  // namespace fable2::renderer::vulkan

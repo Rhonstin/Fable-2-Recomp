@@ -103,6 +103,21 @@ class DrawDispatcher {
   void DrawIndexed(VkCommandBuffer cmd, const DrawParams& params,
                    VkIndexType indexType);
 
+  // Record an indirect non-indexed draw (GPU-instanced). The draw parameters
+  // (vertexCount, instanceCount, firstVertex, firstInstance) are read from
+  // a VkBuffer on the GPU.
+  void DrawIndirect(VkCommandBuffer cmd, VkBuffer buffer, uint64_t offset,
+                    uint32_t drawCount = 1, uint32_t stride = 0);
+
+  // Record an indirect indexed draw (GPU-instanced).
+  void DrawIndexedIndirect(VkCommandBuffer cmd, VkBuffer buffer, uint64_t offset,
+                           uint32_t drawCount = 1, uint32_t stride = 0);
+
+  // Set multiple viewports + scissors (up to 5 on Xenos).
+  void SetMultiViewportScissor(VkCommandBuffer cmd, const ViewportState* viewports,
+                               const ScissorState* scissors, uint32_t count,
+                               bool scissorEnabled);
+
   // Bind the vertex buffer (from shared memory or an uploaded buffer).
   void BindVertexBuffer(VkCommandBuffer cmd, VkBuffer buffer, uint64_t offset);
 
@@ -117,7 +132,10 @@ class DrawDispatcher {
 
   uint64_t drawCalls = 0;
   uint64_t drawIndexedCalls = 0;
+  uint64_t drawIndirectCalls = 0;
+  uint64_t drawIndexedIndirectCalls = 0;
   uint64_t viewportSets = 0;
+  uint64_t multiViewportSets = 0;
 
  private:
   VkContext* ctx_;

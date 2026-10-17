@@ -31,6 +31,15 @@ VkShaderModule PipelineManager::GetShaderModule(const std::vector<uint32_t>& spi
   if (it != shaderCache_.end()) {
     return it->second;
   }
+  // W9: Validate SPIR-V with SPIRV-Tools before creating the VkShaderModule.
+  // Non-fatal: if validation is unavailable or fails, log and continue.
+  if (ctx_->spirvTools().IsValid()) {
+    std::string valErr;
+    if (!ctx_->spirvTools().Validate(spirv.data(), spirv.size(), valErr)) {
+      std::printf("[warn] SPIR-V validation failed (hash %llu): %s\n",
+                  (unsigned long long)hash, valErr.c_str());
+    }
+  }
   Functions& fn = ctx_->functions();
   VkShaderModuleCreateInfo sci{};
   sci.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
