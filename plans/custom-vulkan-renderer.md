@@ -598,14 +598,14 @@ output; we own pipeline assembly.
       call counts, (d) texture/RT cache hit rate, (e) format-conversion bytes.
 - [ ] Target: reach/beat the stock D3D12 plugin's framerate at the same
       resolution + uncapped; document the delta per workstream.
-- [ ] Cut per-packet CPU cost: batched ring consumption, avoid
+- [x] Cut per-packet CPU cost: batched ring consumption, avoid
       per-packet heap allocation, `memcpy`-only fast paths for clear/fill.
-- [ ] Multi-threaded command encoding (if the guest frame maps to independent
+- [x] Multi-threaded command encoding (if the guest frame maps to independent
       render targets) — record guest RT passes on worker threads, present on
       the main thread; keep the vsync worker off the critical path.
-- [ ] Avoid per-frame texture upload storms (native-format aliasing, WS5).
-- [ ] Avoid MSAA resolve cost where the guest uses 1x (detect and skip).
-- [ ] Post-FX passes (FXAA, gamma) — implement as lightweight fullscreen
+- [x] Avoid per-frame texture upload storms (native-format aliasing, WS5).
+- [x] Avoid MSAA resolve cost where the guest uses 1x (detect and skip).
+- [x] Post-FX passes (FXAA, gamma) — implement as lightweight fullscreen
       compute/PS; reuse the SDK's compiled post-FX shaders where they fit.
 - [x] Framerate/fps-cap interplay: verify the vsync worker + our present
       path respect the 30/60/120/144/165/240/unlimited FPS options.

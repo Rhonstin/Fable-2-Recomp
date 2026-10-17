@@ -92,7 +92,10 @@ if(REXGLUE_USE_VULKAN)
         ${FABLE2_RENDERER_ROOT}/src/renderer/vulkan/texture_cache.cpp
         ${FABLE2_RENDERER_ROOT}/src/renderer/vulkan/render_target_cache.cpp
         ${FABLE2_RENDERER_ROOT}/src/renderer/vulkan/shared_memory.cpp
-        ${FABLE2_RENDERER_ROOT}/src/renderer/vulkan/draw_dispatch.cpp)
+        ${FABLE2_RENDERER_ROOT}/src/renderer/vulkan/draw_dispatch.cpp
+        ${FABLE2_RENDERER_ROOT}/src/renderer/vulkan/per_frame_arena.cpp
+        ${FABLE2_RENDERER_ROOT}/src/renderer/vulkan/post_fx.cpp
+        ${FABLE2_RENDERER_ROOT}/src/renderer/vulkan/multi_thread_encoder.cpp)
 
     set(FABLE2VULKAN_SOURCES
         ${FABLE2_RENDERER_ROOT}/src/renderer/plugin_main.cpp

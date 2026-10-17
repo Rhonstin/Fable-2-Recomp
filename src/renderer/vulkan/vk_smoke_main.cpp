@@ -113,7 +113,7 @@ int main(int argc, char** argv) {
     return fable2::renderer::vulkan::RunShaderSmokeTest(cfg, report);
   }
   if (perf) {
-    return fable2::renderer::vulkan::RunPerfSmokeTest(cfg, report);
+    return fable2::renderer::vulkan::RunPerfSmokeTest() ? 0 : 1;
   }
   if (robustness) {
     return fable2::renderer::vulkan::RunRobustnessSmokeTest() ? 0 : 1;
