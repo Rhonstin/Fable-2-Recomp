@@ -1,0 +1,55 @@
+diff --git a/include/rex/ui/presenter.h b/include/rex/ui/presenter.h
+index 8808c1a..11ebec7 100644
+--- a/include/rex/ui/presenter.h
++++ b/include/rex/ui/presenter.h
+@@ -1074,6 +1074,8 @@ class Presenter {
+   std::atomic<uint64_t> vsync_present_gate_last_present_tick_{0};
+   std::atomic<uint64_t> vsync_present_gate_suppressed_{0};
+   uint64_t vsync_present_gate_last_log_time_ms_ = 0;
++#endif  // REX_PLATFORM_WIN32
++
+   // Emulated guest vblank counter (incremented by OnGuestVblank on every
+   // emulated vblank interrupt). This runs at the configured refresh rate
+   // (~60 Hz, or ~1000 Hz when guest_vblank_pacing is off), independent of how
+@@ -1098,6 +1100,7 @@ class Presenter {
+   std::atomic<uint64_t> guest_frame_pace_window_start_ms_{0};
+   std::atomic<uint64_t> guest_frame_pace_window_start_frame_count_{0};
+   std::atomic<uint64_t> guest_frame_pace_window_start_vblank_count_{0};
++#if REX_PLATFORM_WIN32
+   // If output is null or shutdown is true, the signal may not be sent, either
+   // don't limit the frame rate in this case (an exceptional situation, such as
+   // a failure to find the output in DXGI), or don't draw at all if the window
+diff --git a/include/rex/ui/window.h b/include/rex/ui/window.h
+index e2c3edf..463cefc 100644
+--- a/include/rex/ui/window.h
++++ b/include/rex/ui/window.h
+@@ -367,6 +367,8 @@ class Window {
+   // maximization, DPI, etc.
+ 
+   void SetPresenter(Presenter* presenter);
++  // Non-owning access for title-side frame capture and diagnostics.
++  Presenter* graphics_presenter() const { return presenter_; }
+ 
+   // Request repainting of the surface. Can be called from non-UI threads as
+   // long as they know the Surface exists and isn't in the middle of being
+diff --git a/src/system/CMakeLists.txt b/src/system/CMakeLists.txt
+index fdfd166..2408417 100644
+--- a/src/system/CMakeLists.txt
++++ b/src/system/CMakeLists.txt
+@@ -72,10 +72,12 @@ endif()
+ # type"). The flag must reach lld-link (not clang++), so it is passed via
+ # -Xlinker; and the path must be space-free (the project path contains spaces),
+ # so it is made relative to the top-level build dir (the linker's working dir).
+-file(RELATIVE_PATH REXRUNTIME_DEF_REL "${CMAKE_BINARY_DIR}" "${REXRUNTIME_DEF}")
+-set_target_properties(rexruntime PROPERTIES
+-    LINK_DEPENDS "${REXRUNTIME_DEF}"
+-    LINK_OPTIONS "-Xlinker;/DEF:${REXRUNTIME_DEF_REL}")
++if(WIN32)
++    file(RELATIVE_PATH REXRUNTIME_DEF_REL "${CMAKE_BINARY_DIR}" "${REXRUNTIME_DEF}")
++    set_target_properties(rexruntime PROPERTIES
++        LINK_DEPENDS "${REXRUNTIME_DEF}"
++        LINK_OPTIONS "-Xlinker;/DEF:${REXRUNTIME_DEF_REL}")
++endif()
+ 
+ rex_target_pch(rexruntime
+     <mutex>

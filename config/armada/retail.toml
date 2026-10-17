@@ -1,0 +1,263 @@
+# The supplied Russian retail disc has a different executable layout from GOTY.
+# Discover its functions from this executable; never reuse the GOTY address map.
+[project]
+name = "fable_2"
+sdk_version = "0.10.0"
+game_root = "../.."
+
+[entrypoint]
+file_path = "../../default.xex"
+out_directory_path = "../../generated/retail"
+includes = []
+
+# Retail CRT jump-buffer routines, verified by their register save/restore
+# sequences in the decoded XEX. Calls must unwind the native C++ stack too.
+setjmp_address = 0x82FBC310
+longjmp_address = 0x82C6C7E0
+
+# Tail-call entry points reported by validation of retail 0.0.0.8.
+[entrypoint.functions."0x82BDD940"]
+[entrypoint.functions."0x82BC7238"]
+[entrypoint.functions."0x82BC7248"]
+[entrypoint.functions."0x82BC7258"]
+[entrypoint.functions."0x82E3AF10"]
+[entrypoint.functions."0x82BC7260"]
+[entrypoint.functions."0x82BC7250"]
+[entrypoint.functions."0x82BD3E68"]
+[entrypoint.functions."0x82BC7268"]
+[entrypoint.functions."0x82BD3E70"]
+[entrypoint.functions."0x82BD3E78"]
+
+# Indirect methods/getters in concrete .rdata function-pointer runs.
+# Confirmed instruction boundaries follow blr/bctr or a preceding tail branch.
+# Exception-scope landing pads embedded in larger functions are excluded.
+# .rdata reference 0x82006E50
+[entrypoint.functions."0x82268CE8"]
+# .rdata reference 0x82001B1C
+[entrypoint.functions."0x82269408"]
+# .rdata reference 0x82006AA0
+[entrypoint.functions."0x8239D1C8"]
+# .rdata reference 0x82002120
+[entrypoint.functions."0x824A6DB8"]
+# .rdata reference 0x820BCB20
+[entrypoint.functions."0x8259BB80"]
+# .rdata reference 0x82007340
+[entrypoint.functions."0x8261CEB0"]
+# .rdata reference 0x820C1184
+[entrypoint.functions."0x82627B98"]
+# .rdata reference 0x820C1194
+[entrypoint.functions."0x82627C38"]
+# .rdata reference 0x820C11A4
+[entrypoint.functions."0x82627CC8"]
+# .rdata reference 0x820C11B4
+[entrypoint.functions."0x82627D58"]
+# .rdata reference 0x820C11C4
+[entrypoint.functions."0x82627DE8"]
+# .rdata reference 0x820C11D4
+[entrypoint.functions."0x82627E88"]
+# .rdata reference 0x820C11E8
+[entrypoint.functions."0x826280C0"]
+# .rdata reference 0x820C11FC
+[entrypoint.functions."0x82628290"]
+# .rdata reference 0x820C120C
+[entrypoint.functions."0x82628330"]
+# .rdata reference 0x820C121C
+[entrypoint.functions."0x82628468"]
+# .rdata reference 0x820C122C
+[entrypoint.functions."0x82628508"]
+# .rdata reference 0x820C123C
+[entrypoint.functions."0x82628598"]
+# .rdata reference 0x820C124C
+[entrypoint.functions."0x82628628"]
+# .rdata reference 0x820C125C
+[entrypoint.functions."0x826286B8"]
+# .rdata reference 0x820C126C
+[entrypoint.functions."0x82628748"]
+# .rdata reference 0x820C127C
+[entrypoint.functions."0x826287D8"]
+# .rdata reference 0x820C128C
+[entrypoint.functions."0x82628868"]
+# .rdata reference 0x820C129C
+[entrypoint.functions."0x826288F8"]
+# .rdata reference 0x820C12AC
+[entrypoint.functions."0x82628A10"]
+# .rdata reference 0x820C12BC
+[entrypoint.functions."0x82628AA0"]
+# .rdata reference 0x820C12CC
+[entrypoint.functions."0x82628B30"]
+# .rdata reference 0x820C12DC
+[entrypoint.functions."0x82628BC0"]
+# .rdata reference 0x820C12EC
+[entrypoint.functions."0x82628C50"]
+# .rdata reference 0x820C12FC
+[entrypoint.functions."0x82628CE0"]
+# .rdata reference 0x820C130C
+[entrypoint.functions."0x82628D70"]
+# .rdata reference 0x820C131C
+[entrypoint.functions."0x82628E00"]
+# .rdata reference 0x820C132C
+[entrypoint.functions."0x82628E90"]
+# .rdata reference 0x820C133C
+[entrypoint.functions."0x82628F20"]
+# .rdata reference 0x820C134C
+[entrypoint.functions."0x82628FB0"]
+# .rdata reference 0x820C135C
+[entrypoint.functions."0x82629040"]
+# .rdata reference 0x820C136C
+[entrypoint.functions."0x826290D0"]
+# .rdata reference 0x820C137C
+[entrypoint.functions."0x82629160"]
+# .rdata reference 0x820C138C
+[entrypoint.functions."0x826291F0"]
+# .rdata reference 0x820C139C
+[entrypoint.functions."0x82629280"]
+# .rdata reference 0x820C13AC
+[entrypoint.functions."0x82629310"]
+# .rdata reference 0x82007124
+[entrypoint.functions."0x82873CC0"]
+# .rdata reference 0x8200719C
+[entrypoint.functions."0x828AE028"]
+# .rdata reference 0x820DD850
+[entrypoint.functions."0x828D3C80"]
+# .rdata reference 0x820EB790
+[entrypoint.functions."0x829C0E00"]
+# .rdata reference 0x82002B28
+[entrypoint.functions."0x82AE8178"]
+# .rdata reference 0x820F4364
+[entrypoint.functions."0x82B1DA48"]
+# .rdata reference 0x820F4898
+[entrypoint.functions."0x82B48BE0"]
+# .rdata reference 0x820F80B0
+[entrypoint.functions."0x82B808B0"]
+# .rdata reference 0x820094E0
+[entrypoint.functions."0x82BC1C60"]
+# .rdata reference 0x820094E4
+[entrypoint.functions."0x82BC1C80"]
+# .rdata reference 0x8200A414
+[entrypoint.functions."0x82BC8220"]
+# .rdata reference 0x8200A418
+[entrypoint.functions."0x82BC8230"]
+# .rdata reference 0x820069C0
+[entrypoint.functions."0x82BC8240"]
+# .rdata reference 0x8200A990
+[entrypoint.functions."0x82BD1398"]
+# .rdata reference 0x8200AC2C
+[entrypoint.functions."0x82BD3BE8"]
+# .rdata reference 0x8200A430
+[entrypoint.functions."0x82BE6A80"]
+# .rdata reference 0x8200BD24
+[entrypoint.functions."0x82BF8308"]
+# .rdata reference 0x8200CB80
+[entrypoint.functions."0x82C14E20"]
+# .rdata reference 0x8200CB8C
+[entrypoint.functions."0x82C14E40"]
+# .rdata reference 0x8200CB98
+[entrypoint.functions."0x82C14E58"]
+# .rdata reference 0x8200CBA4
+[entrypoint.functions."0x82C14E78"]
+# .rdata reference 0x8200CC34
+[entrypoint.functions."0x82C15100"]
+# .rdata reference 0x8200CC40
+[entrypoint.functions."0x82C15120"]
+# .rdata reference 0x8200CC4C
+[entrypoint.functions."0x82C15140"]
+# .rdata reference 0x8200AD74
+[entrypoint.functions."0x82C1B168"]
+# .rdata reference 0x8200E830
+[entrypoint.functions."0x82C49538"]
+# .rdata reference 0x8200F5FC
+[entrypoint.functions."0x82C50EB8"]
+# .rdata reference 0x82013A6C
+[entrypoint.functions."0x82C94060"]
+# .rdata reference 0x82013930
+[entrypoint.functions."0x82C94AD8"]
+# .rdata reference 0x82013C18
+[entrypoint.functions."0x82C982D8"]
+# .rdata reference 0x82014AB0
+[entrypoint.functions."0x82C9DD38"]
+# .rdata reference 0x82014B20
+[entrypoint.functions."0x82C9DD60"]
+# .rdata reference 0x82014AF0
+[entrypoint.functions."0x82C9DD68"]
+# .rdata reference 0x82014BB0
+[entrypoint.functions."0x82C9FEA8"]
+# .rdata reference 0x82014AEC
+[entrypoint.functions."0x82C9FEB0"]
+# .rdata reference 0x82014AC4
+[entrypoint.functions."0x82C9FEB8"]
+# .rdata reference 0x82014BE8
+[entrypoint.functions."0x82C9FEC0"]
+# .rdata reference 0x82014BC4
+[entrypoint.functions."0x82C9FED0"]
+# .rdata reference 0x82014BF8
+[entrypoint.functions."0x82C9FEF0"]
+# .rdata reference 0x82013C50
+[entrypoint.functions."0x82CA2498"]
+# .rdata reference 0x82013C44
+[entrypoint.functions."0x82CA24E0"]
+# .rdata reference 0x82002748
+[entrypoint.functions."0x82E422E0"]
+# .rdata reference 0x820394C0
+[entrypoint.functions."0x82E43DA8"]
+# .rdata reference 0x82039798
+[entrypoint.functions."0x82E4CCB8"]
+# .rdata reference 0x8203A9BC
+[entrypoint.functions."0x82E743E0"]
+# .rdata reference 0x8203AF04
+[entrypoint.functions."0x82E7DC40"]
+# .rdata reference 0x8203CC58
+[entrypoint.functions."0x82EB01A8"]
+# .rdata reference 0x8203CC5C
+[entrypoint.functions."0x82EB01C0"]
+# .rdata reference 0x8203CE5C
+[entrypoint.functions."0x82EB4ED8"]
+# .rdata reference 0x8203DEC8
+[entrypoint.functions."0x82EC0800"]
+# .rdata reference 0x8203DE58
+[entrypoint.functions."0x82EC0810"]
+# .rdata reference 0x8203E360
+[entrypoint.functions."0x82EC7F60"]
+# .rdata reference 0x8203E3B0
+[entrypoint.functions."0x82EC7F70"]
+# .rdata reference 0x8203F2E8
+[entrypoint.functions."0x82ED9948"]
+# .rdata reference 0x8203F304
+[entrypoint.functions."0x82ED9960"]
+# .rdata reference 0x820405B4
+[entrypoint.functions."0x82EE8500"]
+# .rdata reference 0x820405BC
+[entrypoint.functions."0x82EE85C0"]
+# .rdata reference 0x820405C0
+[entrypoint.functions."0x82EE85D8"]
+# .rdata reference 0x82040E88
+[entrypoint.functions."0x82EFF630"]
+# .rdata reference 0x82041A70
+[entrypoint.functions."0x82F12B48"]
+# .rdata reference 0x8203E7E0
+[entrypoint.functions."0x82F23CC0"]
+# .rdata reference 0x8203E7E8
+[entrypoint.functions."0x82F23CE8"]
+# .rdata reference 0x8203E7EC
+[entrypoint.functions."0x82F23D10"]
+# .rdata reference 0x820463A8
+[entrypoint.functions."0x82F73610"]
+# .rdata reference 0x82047774
+[entrypoint.functions."0x82FA4018"]
+# .rdata reference 0x82047784
+[entrypoint.functions."0x82FA4020"]
+# .rdata reference 0x82054328
+[entrypoint.functions."0x83012F28"]
+# .rdata reference 0x820544EC
+[entrypoint.functions."0x830130F8"]
+# .rdata reference 0x820544F8
+[entrypoint.functions."0x83013170"]
+# .rdata reference 0x8205452C
+[entrypoint.functions."0x83013598"]
+# .rdata reference 0x82054340
+[entrypoint.functions."0x830135B8"]
+# .rdata reference 0x82083064
+[entrypoint.functions."0x831822E0"]
+# .rdata reference 0x82087598
+[entrypoint.functions."0x831B1F08"]
+# .rdata reference 0x820879FC
+[entrypoint.functions."0x831BC0B8"]

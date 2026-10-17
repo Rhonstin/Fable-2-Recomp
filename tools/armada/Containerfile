@@ -1,0 +1,10 @@
+FROM registry.fedoraproject.org/fedora:44
+RUN dnf install -y --setopt=install_weak_deps=False \
+    clang llvm lld gcc-c++ cmake ninja-build python3 git pkgconf-pkg-config \
+    wayland-devel wayland-protocols-devel libxkbcommon-devel \
+    libX11-devel libXext-devel libXcursor-devel libXrandr-devel libXi-devel \
+    libXScrnSaver-devel libXfixes-devel libXrender-devel libXtst-devel \
+    libXinerama-devel libXv-devel libdrm-devel mesa-libEGL-devel libdecor-devel \
+    alsa-lib-devel pulseaudio-libs-devel pipewire-devel vulkan-loader-devel \
+    && dnf clean all
+WORKDIR /work

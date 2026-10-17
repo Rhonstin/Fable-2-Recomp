@@ -31,7 +31,7 @@ endif()
 # 0.10.0 runtime is D3D12-only and is missing the 16 Vulkan symbols the plugin
 # needs, so the game must run against this source-built runtime instead.
 set(REXGLUE_USE_VULKAN ON CACHE BOOL "Enable Vulkan graphics backend" FORCE)
-set(REXGLUE_USE_D3D12 ON CACHE BOOL "Enable D3D12 graphics backend" FORCE)
+set(REXGLUE_USE_D3D12 ${WIN32} CACHE BOOL "Enable D3D12 graphics backend" FORCE)
 
 # SDK source: default to the thirdparty/rexglue-sdk submodule (your fork,
 # branch vsync-present-gate); override with -DREXGLUE_SDK_SOURCE=...
@@ -47,7 +47,9 @@ endif()
 # (_mm_shuffle_epi8) without per-function target attributes, and the SDK's
 # CMake compiles with a baseline x86-64 ISA - so enable a modern x86-64
 # baseline for the whole tree here (the game target already uses -msse4.1).
-add_compile_options(-msse4.2)
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64)$")
+    add_compile_options(-msse4.2)
+endif()
 
 # Add PDB debug info to the Release build so crash dumps can be symbolized with
 # cdb. -g emits CodeView debug info into the objects (does not change the -O3
@@ -56,6 +58,21 @@ add_compile_options(-msse4.2)
 add_compile_options($<$<CONFIG:RELEASE>:-g>)
 # /DEBUG must reach lld-link via -Xlinker (a bare /DEBUG is read by the clang
 # driver as a file path). Only Release is built in this wrapper.
-add_link_options(-Xlinker /DEBUG)
+if(WIN32)
+    add_link_options(-Xlinker /DEBUG)
+endif()
 
 add_subdirectory(${REXGLUE_SDK_SOURCE} "${CMAKE_BINARY_DIR}/sdk")
+
+if(UNIX AND NOT APPLE)
+    add_executable(fable2_vulkan_probe "${CMAKE_CURRENT_SOURCE_DIR}/../../src/armada/vulkan_probe.cpp")
+    target_link_libraries(fable2_vulkan_probe PRIVATE rex::runtime)
+    add_dependencies(fable2_vulkan_probe rexgpu-xenos)
+    target_include_directories(fable2_vulkan_probe PRIVATE "${REXGLUE_SDK_SOURCE}/thirdparty/renderdoc")
+    set_target_properties(fable2_vulkan_probe PROPERTIES
+        BUILD_RPATH "$<TARGET_FILE_DIR:rexruntime>")
+    add_custom_command(TARGET fable2_vulkan_probe POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            $<TARGET_FILE:rexgpu-xenos> $<TARGET_FILE_DIR:fable2_vulkan_probe>
+        VERBATIM)
+endif()
